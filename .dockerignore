@@ -1,0 +1,11 @@
+.cursor
+.netlify
+netlify.toml
+node_modules
+netlify
+.env
+vercel.json
+dist
+
+
+

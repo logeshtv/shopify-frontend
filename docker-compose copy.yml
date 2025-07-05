@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  shopifyq-app:
+    container_name: shopy
+    image: shopy
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - VITE_SHOPIFY_API_KEY=2c03eed9d8c82d925f0306cb869fbf5d
+      - VITE_SHOPIFY_API_SECRET=f095bb3fbcefcc24a9715a0a9ebc38f3
+      - VITE_REDIRECT_URI=http://localhost:8080/auth/callback
+      - VITE_SUPABASE_URL=https://kepmxcdjelktrhctkquw.supabase.co
+      - VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtlcG14Y2RqZWxrdHJoY3RrcXV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkxNDc2NjgsImV4cCI6MjA2NDcyMzY2OH0.P704KxjbhN-iR_X5gwu8jVsPztOSRHo7J2WSXTeERRU
+      - SUPABASE_ACCESS_TOKEN=sbp_463d41bd96eebffe48bb43850d16fae8b6fc67fe
+      - STRIPE_SECRET_KEY=sk_test_51RcmNSQiUhrwJo9Cnsso0DgP09aQ27WS1a6uRl3Q353u3FRAyx1UQVJSb7v0Vx6c1CNj6v3CVH63lQw1DTV0KJqo00EU3bK3cZ
+      - VITE_STRIPE_WEBHOOK_SECRET=whsec_1991adb496c4528c9d6b64a6690ccfc1635845fbb9f0d1a0b47c18c02c9c0cb3
+      - VITE_BACKEND_ENDPOINT=http://localhost:3001/api
+    restart: unless-stopped
+    volumes:
+      # For development/debugging purposes - uncomment if needed
+      # - ./api:/app/api
+      # - ./src/api:/app/src/api
+      - ./logs:/app/logs
+    networks:
+      - shopifyq-network
+    # Uncomment if you need healthcheck
+    # healthcheck:
+    #   test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 10s
+
+networks:
+  shopifyq-network:
+    driver: bridge

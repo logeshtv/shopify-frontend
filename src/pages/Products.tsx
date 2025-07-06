@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import {
   Package,
@@ -14,6 +13,8 @@ import {
   BarChart3,
   Save,
   Trash2,
+  Image as ImageIcon,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,18 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DashboardNavigation } from "@/components/DashboardNavigation";
 import { supabase } from "@/lib/supabaseClient";
+import { LoadingSpinner } from "./LoadingSpinner";
+
+const API = {
+  PRODUCTS_ALL: "/shopify/getAllProducts",
+  PRODUCT_ID: "/shopify/getProductID",
+  PRODUCT_CREATE: "/shopify/createProduct",
+  PRODUCT_UPDATE: "/shopify/updateProductID",
+  PRODUCT_DELETE: "/shopify/deleteProduct",
+  IMAGE_CREATE: "/shopify/image/create",
+  IMAGE_DELETE: "/shopify/image/delete",
+};
+
 
 const Products = () => {
   const [products, setProducts] = useState<any[]>([]);
@@ -40,122 +53,46 @@ const Products = () => {
   const [addProductOpen, setAddProductOpen] = useState(false);
   const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
 
+  /* fetch products once */
   useEffect(() => {
-    const fetchShopifyProducts = async () => {
+    (async () => {
       try {
         setLoading(true);
-        const email = localStorage.getItem("user_email");
-        const userType = localStorage.getItem("user_type");
-
-        if (!email) throw new Error("User not logged in");
-
-        let shop = null;
-        let accessToken = null;
-
-        if (userType === "sub_user") {
-          const { data: subUser } = await supabase
-            .from("sub_users")
-            .select("owner_id")
-            .eq("email", email)
-            .single();
-          const { data: shopRow } = await supabase
-            .from("shops")
-            .select("shopify_domain, shopify_access_token")
-            .eq("user_id", subUser.owner_id)
-            .single();
-          shop = shopRow?.shopify_domain;
-          accessToken = shopRow?.shopify_access_token;
-        } else {
-          const { data: user } = await supabase
-            .from("users")
-            .select("id")
-            .eq("email", email)
-            .single();
-          const { data: shopRow } = await supabase
-            .from("shops")
-            .select("shopify_domain, shopify_access_token")
-            .eq("user_id", user.id)
-            .single();
-          shop = shopRow?.shopify_domain;
-          accessToken = shopRow?.shopify_access_token;
-        }
-
-        const res = await fetch(`${backend}/shopify/getAllProducts`, {
+        const { shop, accessToken } = await resolveShopAndToken();
+        const res = await fetch(`${backend}${API.PRODUCTS_ALL}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ shop, accessToken }),
         });
-
         const payload = await res.json();
         setProducts(payload.products || []);
-      } catch (err) {
-        setError(err.message);
+      } catch (e) {
+        setError(e.message);
       } finally {
         setLoading(false);
       }
-    };
-
-    fetchShopifyProducts();
+    })();
   }, []);
 
-  const handleDeleteProduct = async (productId) => {
+  /* delete product */
+  const handleDeleteProduct = async (productId: string) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
-    
     try {
-      const email = localStorage.getItem("user_email");
-      const userType = localStorage.getItem("user_type");
-      let shop = null;
-      let shopify_access_token = null;
-
-      if (userType === "sub_user") {
-        const { data: subUser } = await supabase
-          .from("sub_users")
-          .select("owner_id")
-          .eq("email", email)
-          .single();
-        const { data: shopRow } = await supabase
-          .from("shops")
-          .select("shopify_domain, shopify_access_token")
-          .eq("user_id", subUser?.owner_id)
-          .single();
-        shop = shopRow?.shopify_domain;
-        shopify_access_token = shopRow?.shopify_access_token;
-      } else {
-        const { data: user } = await supabase
-          .from("users")
-          .select("id")
-          .eq("email", email)
-          .single();
-        const { data: shopRow } = await supabase
-          .from("shops")
-          .select("shopify_domain, shopify_access_token")
-          .eq("user_id", user?.id)
-          .single();
-        shop = shopRow?.shopify_domain;
-        shopify_access_token = shopRow?.shopify_access_token;
-      }
-
-      const response = await fetch(`${backend}/shopify/deleteProduct`, {
+      const { shop, accessToken } = await resolveShopAndToken();
+      const r = await fetch(`${backend}${API.PRODUCT_DELETE}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          shop, 
-          accessToken: shopify_access_token, 
-          productId
-        }),
+        body: JSON.stringify({ shop, accessToken, productId }),
       });
-
-      if (response.ok) {
-        alert("Product deleted successfully!");
-        window.location.reload();
-      } else {
-        alert("Failed to delete product");
-      }
-    } catch (error) {
-      alert("Error deleting product: " + error.message);
+      if (!r.ok) throw new Error(await r.text());
+      alert("Product deleted successfully!");
+      window.location.reload();
+    } catch (e) {
+      alert(e.message);
     }
   };
 
+  /* simple filter */
   const filteredProducts = useMemo(() => {
     if (!searchTerm) return products;
     return products.filter(
@@ -169,43 +106,25 @@ const Products = () => {
 
   const total = products.length;
   const hsCoded = products.filter((p) => p?.hs_code).length;
-  const needReview = products.filter((p) => !p?.hs_code).length;
-  const highRisk = 0;
+  const needReview = total - hsCoded;
+
+
 
   return (
     <div className="min-h-screen bg-slate-50">
       <DashboardNavigation />
-
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">
-              Product Management
-            </h1>
-            <p className="text-slate-600">
-              Manage your Shopify products and compliance status
-            </p>
-          </div>
-          <div className="flex space-x-3">
-            <Button variant="outline" onClick={() => window.location.reload()} disabled={loading}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              {loading ? "Syncing…" : "Sync from Shopify"}
-            </Button>
-            <Button 
-              className="bg-gradient-to-r from-blue-600 to-purple-600"
-              onClick={() => setAddProductOpen(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Product
-            </Button>
-          </div>
-        </div>
+        <Header
+          loading={loading}
+          onAdd={() => setAddProductOpen(true)}
+          onSync={() => window.location.reload()}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <StatsCard title="Total Products" value={total} icon={Package} />
           <StatsCard title="HS Coded" value={hsCoded} icon={CheckCircle} />
           <StatsCard title="Need Review" value={needReview} icon={AlertTriangle} />
-          <StatsCard title="High ESG Risk" value={highRisk} icon={AlertTriangle} />
+          <StatsCard title="High ESG Risk" value={0} icon={AlertTriangle} />
         </div>
 
         <Card className="border-0 shadow-lg mb-8">
@@ -228,6 +147,7 @@ const Products = () => {
           </CardContent>
         </Card>
 
+        {/* ───────────────── PRODUCT LIST ───────────────── */}
         <Card className="border-0 shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -270,7 +190,6 @@ const Products = () => {
           onClose={() => setSelectedProductId(null)}
         />
       )}
-
       {editProductId && (
         <ProductEditModal
           productId={editProductId}
@@ -278,7 +197,6 @@ const Products = () => {
           onSave={() => window.location.reload()}
         />
       )}
-
       {addProductOpen && (
         <ProductAddModal
           onClose={() => setAddProductOpen(false)}
@@ -288,6 +206,33 @@ const Products = () => {
     </div>
   );
 };
+
+
+const Header = ({ loading, onAdd, onSync }) => (
+  <div className="flex justify-between items-center mb-8">
+    <div>
+      <h1 className="text-3xl font-bold text-slate-900 mb-2">
+        Product Management
+      </h1>
+      <p className="text-slate-600">
+        Manage your Shopify products and compliance status
+      </p>
+    </div>
+    <div className="flex space-x-3">
+      <Button variant="outline" onClick={onSync} disabled={loading}>
+        <RefreshCw className="h-4 w-4 mr-2" />
+        {loading ? "Syncing…" : "Sync from Shopify"}
+      </Button>
+      <Button
+        className="bg-gradient-to-r from-blue-600 to-purple-600"
+        onClick={onAdd}
+      >
+        <Plus className="h-4 w-4 mr-2" />
+        Add Product
+      </Button>
+    </div>
+  </div>
+);
 
 const StatsCard = ({ title, value, icon: Icon }) => (
   <Card className="border-0 shadow-lg">
@@ -348,6 +293,9 @@ const ProductRow = ({ product, onView, onEdit, onDelete }) => {
         <Button variant="ghost" size="sm" onClick={onEdit}>
           <Edit className="h-4 w-4" />
         </Button>
+        <Button variant="ghost" size="sm">
+          <BarChart3 className="h-4 w-4" />
+        </Button>
         <Button variant="ghost" size="sm" onClick={onDelete}>
           <Trash2 className="h-4 w-4 text-red-500" />
         </Button>
@@ -361,57 +309,30 @@ const ProductRow = ({ product, onView, onEdit, onDelete }) => {
 
 const ProductViewModal = ({ productId, onClose }) => {
   const [product, setProduct] = useState<any>(null);
+  const [images, setImages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
 
   useEffect(() => {
     const fetchProduct = async () => {
-      const email = localStorage.getItem("user_email");
-      const userType = localStorage.getItem("user_type");
-      let shop = null;
-      let accessToken = null;
-
-      if (userType === "sub_user") {
-        const { data: subUser } = await supabase
-          .from("sub_users")
-          .select("owner_id")
-          .eq("email", email)
-          .single();
-        const { data: shopRow } = await supabase
-          .from("shops")
-          .select("shopify_domain, shopify_access_token")
-          .eq("user_id", subUser?.owner_id)
-          .single();
-        shop = shopRow?.shopify_domain;
-        accessToken = shopRow?.shopify_access_token;
-      } else {
-        const { data: user } = await supabase
-          .from("users")
-          .select("id")
-          .eq("email", email)
-          .single();
-        const { data: shopRow } = await supabase
-          .from("shops")
-          .select("shopify_domain, shopify_access_token")
-          .eq("user_id", user?.id)
-          .single();
-        shop = shopRow?.shopify_domain;
-        accessToken = shopRow?.shopify_access_token;
+      try {
+        const { shop, accessToken } = await resolveShopAndToken();
+        const res = await fetch(`${backend}${API.PRODUCT_ID}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ shop, accessToken, productId }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setProduct(data.product);
+          setImages(data.product.images || []);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
       }
-
-      const res = await fetch(`${backend}/shopify/getProductID`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shop, accessToken, productId }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setProduct(data.product);
-      }
-      setLoading(false);
     };
-
     fetchProduct();
   }, [productId]);
 
@@ -425,11 +346,23 @@ const ProductViewModal = ({ productId, onClose }) => {
           ✕
         </button>
         {loading ? (
-          <p>Loading...</p>
+  <div className="py-8">
+    <LoadingSpinner size="lg" />
+  </div>
         ) : !product ? (
           <p>Product not found</p>
         ) : (
           <div className="space-y-4">
+            {images.length > 0 && (
+              <div className="grid grid-cols-2 gap-2">
+                {images.slice(0, 4).map((img) => (
+                  <div key={img.id} className="h-24 bg-slate-100 rounded-lg overflow-hidden">
+                    <img src={img.src} alt={img.alt || product.title} className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            )}
+            
             <h2 className="text-xl font-bold">{product.title}</h2>
             <div className="grid grid-cols-2 gap-4 text-sm text-slate-700">
               <div><strong>ID:</strong> {product.id}</div>
@@ -455,6 +388,9 @@ const ProductViewModal = ({ productId, onClose }) => {
 const ProductEditModal = ({ productId, onClose, onSave }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [product, setProduct] = useState<any>(null);
+  const [images, setImages] = useState<any[]>([]);
   const [form, setForm] = useState({
     title: "",
     body_html: "",
@@ -464,123 +400,106 @@ const ProductEditModal = ({ productId, onClose, onSave }) => {
     sku: "",
     inventory_quantity: 0
   });
+  const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
 
   useEffect(() => {
     fetchProduct();
   }, [productId]);
 
   const fetchProduct = async () => {
-    const email = localStorage.getItem("user_email");
-    const userType = localStorage.getItem("user_type");
-    let shop = null;
-    let shopify_access_token = null;
-
-    if (userType === "sub_user") {
-      const { data: subUser } = await supabase
-        .from("sub_users")
-        .select("owner_id")
-        .eq("email", email)
-        .single();
-      const { data: shopRow } = await supabase
-        .from("shops")
-        .select("shopify_domain, shopify_access_token")
-        .eq("user_id", subUser?.owner_id)
-        .single();
-      shop = shopRow?.shopify_domain;
-      shopify_access_token = shopRow?.shopify_access_token;
-    } else {
-      const { data: user } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email", email)
-        .single();
-      const { data: shopRow } = await supabase
-        .from("shops")
-        .select("shopify_domain, shopify_access_token")
-        .eq("user_id", user?.id)
-        .single();
-      shop = shopRow?.shopify_domain;
-      shopify_access_token = shopRow?.shopify_access_token;
-    }
-
-    const response = await fetch(`${import.meta.env.VITE_BACKEND_ENDPOINT}/shopify/getProductID`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ shop, accessToken: shopify_access_token, productId }),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      const product = data.product;
-      setForm({
-        title: product.title,
-        body_html: product.body_html || "",
-        vendor: product.vendor,
-        product_type: product.product_type,
-        price: product.variants?.[0]?.price || "",
-        sku: product.variants?.[0]?.sku || "",
-        inventory_quantity: product.variants?.[0]?.inventory_quantity || 0
+    try {
+      const { shop, accessToken } = await resolveShopAndToken();
+      const response = await fetch(`${backend}${API.PRODUCT_ID}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shop, accessToken, productId }),
       });
+
+      if (response.ok) {
+        const data = await response.json();
+        const product = data.product;
+        setProduct(product);
+        setImages(product.images || []);
+        setForm({
+          title: product.title,
+          body_html: product.body_html || "",
+          vendor: product.vendor,
+          product_type: product.product_type,
+          price: product.variants?.[0]?.price || "",
+          sku: product.variants?.[0]?.sku || "",
+          inventory_quantity: product.variants?.[0]?.inventory_quantity || 0
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
+    const file = e.target.files[0];
+    
+    setUploading(true);
+    try {
+      const { attachment, filename } = await fileToAttachment(file);
+      const { shop, accessToken } = await resolveShopAndToken();
+      const resp = await fetch(`${backend}${API.IMAGE_CREATE}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shop,
+          accessToken,
+          productId,
+          imageData: { attachment, filename, alt: filename },
+        }),
+      });
+      if (!resp.ok) throw new Error('Upload failed');
+      const { image } = await resp.json();
+      setImages((prev) => [...prev, image]);
+    } catch (e) {
+      alert('Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteImage = async (imageId) => {
+    if (!confirm("Delete this image?")) return;
+    try {
+      const { shop, accessToken } = await resolveShopAndToken();
+      const res = await fetch(`${backend}${API.IMAGE_DELETE}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shop, accessToken, productId, imageId }),
+      });
+      if (res.ok) {
+        setImages(images.filter(img => img.id !== imageId));
+        alert("Image deleted successfully!");
+      }
+    } catch (e) {
+      alert("Failed to delete image");
+    }
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const email = localStorage.getItem("user_email");
-      const userType = localStorage.getItem("user_type");
-      let shop = null;
-      let shopify_access_token = null;
+      const { shop, accessToken } = await resolveShopAndToken();
 
-      if (userType === "sub_user") {
-        const { data: subUser } = await supabase
-          .from("sub_users")
-          .select("owner_id")
-          .eq("email", email)
-          .single();
-        const { data: shopRow } = await supabase
-          .from("shops")
-          .select("shopify_domain, shopify_access_token")
-          .eq("user_id", subUser?.owner_id)
-          .single();
-        shop = shopRow?.shopify_domain;
-        shopify_access_token = shopRow?.shopify_access_token;
-      } else {
-        const { data: user } = await supabase
-          .from("users")
-          .select("id")
-          .eq("email", email)
-          .single();
-        const { data: shopRow } = await supabase
-          .from("shops")
-          .select("shopify_domain, shopify_access_token")
-          .eq("user_id", user?.id)
-          .single();
-        shop = shopRow?.shopify_domain;
-        shopify_access_token = shopRow?.shopify_access_token;
-      }
-
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_ENDPOINT}/shopify/updateProductID`, {
+      const updateResp = await fetch(`${backend}${API.PRODUCT_UPDATE}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          shop, 
-          accessToken: shopify_access_token, 
-          productId,
-          productData: form
-        }),
+        body: JSON.stringify({ shop, accessToken, productId, productData: form }),
       });
+      if (!updateResp.ok) throw new Error("Failed to update product");
 
-      if (response.ok) {
-        alert("Product updated successfully!");
-        onSave?.();
-        onClose();
-      } else {
-        alert(`Failed to update product. Status: ${response.status}`);
-      }
-    } catch (error) {
-      alert("Error updating product: " + error.message);
+      alert("Product updated successfully!");
+      onSave?.();
+      onClose();
+    } catch (e) {
+      alert(e.message);
     } finally {
       setSaving(false);
     }
@@ -605,64 +524,88 @@ const ProductEditModal = ({ productId, onClose, onSave }) => {
         </div>
 
         {loading ? (
-          <p>Loading...</p>
+           <div className="py-8">
+           <LoadingSpinner size="lg" />
+         </div>
         ) : (
           <div className="space-y-4">
-          <Input
-            placeholder="Product Title"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-          />
-          <Input
-            placeholder="Vendor"
-            value={form.vendor}
-            onChange={(e) => setForm({ ...form, vendor: e.target.value })}
-          />
-          <Input
-            placeholder="Product Type"
-            value={form.product_type}
-            onChange={(e) => setForm({ ...form, product_type: e.target.value })}
-          />
-          <Input
-            placeholder="Price"
-            value={form.price}
-            onChange={(e) => setForm({ ...form, price: e.target.value })}
-          />
-          <Input
-            placeholder="SKU"
-            value={form.sku}
-            onChange={(e) => setForm({ ...form, sku: e.target.value })}
-          />
-          <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">
-              Inventory Quantity
-            </label>
+            {images.length > 0 && (
+              <div>
+                <p className="text-sm font-medium mb-2">Current Images</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {images.map((img) => (
+                    <div key={img.id} className="relative h-20 bg-slate-100 rounded-lg overflow-hidden">
+                      <img src={img.src} alt={img.alt} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => handleDeleteImage(img.id)}
+                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <Input
+              placeholder="Product Title"
+              value={form.title}
+              onChange={(e) => setForm({...form, title: e.target.value})}
+            />
+            <Input
+              placeholder="Vendor"
+              value={form.vendor}
+              onChange={(e) => setForm({...form, vendor: e.target.value})}
+            />
+            <Input
+              placeholder="Product Type"
+              value={form.product_type}
+              onChange={(e) => setForm({...form, product_type: e.target.value})}
+            />
+            <Input
+              placeholder="Price"
+              value={form.price}
+              onChange={(e) => setForm({...form, price: e.target.value})}
+            />
+            <Input
+              placeholder="SKU"
+              value={form.sku}
+              onChange={(e) => setForm({...form, sku: e.target.value})}
+            />
+            <Input
+              placeholder="Inventory Quantity"
               type="number"
               value={form.inventory_quantity}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  inventory_quantity: parseInt(e.target.value) || 0,
-                })
-              }
+              onChange={(e) => setForm({...form, inventory_quantity: parseInt(e.target.value) || 0})}
             />
+            <Textarea
+              placeholder="Description (HTML)"
+              value={form.body_html}
+              onChange={(e) => setForm({...form, body_html: e.target.value})}
+            />
+            
+            <label className={`flex items-center gap-2 text-sm font-medium cursor-pointer ${uploading ? 'opacity-50' : ''}`}>
+              <ImageIcon className="h-4 w-4" />
+              <span>{uploading ? "Uploading..." : "Add New Image"}</span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleUpload}
+                disabled={uploading}
+              />
+            </label>
           </div>
-          <Textarea
-            placeholder="Description (HTML)"
-            rows={5}
-            value={form.body_html}
-            onChange={(e) => setForm({ ...form, body_html: e.target.value })}
-          />
-        </div>
-      )}
-    </div>
+        )}
+      </div>
     </div>
   );
 };
 
 const ProductAddModal = ({ onClose, onSave }) => {
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [form, setForm] = useState({
     title: "",
     body_html: "",
@@ -672,64 +615,71 @@ const ProductAddModal = ({ onClose, onSave }) => {
     sku: "",
     inventory_quantity: 0
   });
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
+    const files = Array.from(e.target.files);
+    setImageFiles(files);
+    
+    // Create preview URLs
+    const previews = files.map(file => URL.createObjectURL(file));
+    setImagePreviews(previews);
+  };
+
+  const removeImage = (index: number) => {
+    const newFiles = imageFiles.filter((_, i) => i !== index);
+    const newPreviews = imagePreviews.filter((_, i) => i !== index);
+    
+    // Revoke the URL to free memory
+    URL.revokeObjectURL(imagePreviews[index]);
+    
+    setImageFiles(newFiles);
+    setImagePreviews(newPreviews);
+  };
 
   const handleAdd = async () => {
     setSaving(true);
     try {
-      const email = localStorage.getItem("user_email");
-      const userType = localStorage.getItem("user_type");
-      let shop = null;
-      let shopify_access_token = null;
+      const { shop, accessToken } = await resolveShopAndToken();
 
-      if (userType === "sub_user") {
-        const { data: subUser } = await supabase
-          .from("sub_users")
-          .select("owner_id")
-          .eq("email", email)
-          .single();
-        const { data: shopRow } = await supabase
-          .from("shops")
-          .select("shopify_domain, shopify_access_token")
-          .eq("user_id", subUser?.owner_id)
-          .single();
-        shop = shopRow?.shopify_domain;
-        shopify_access_token = shopRow?.shopify_access_token;
-      } else {
-        const { data: user } = await supabase
-          .from("users")
-          .select("id")
-          .eq("email", email)
-          .single();
-        const { data: shopRow } = await supabase
-          .from("shops")
-          .select("shopify_domain, shopify_access_token")
-          .eq("user_id", user?.id)
-          .single();
-        shop = shopRow?.shopify_domain;
-        shopify_access_token = shopRow?.shopify_access_token;
-      }
-
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_ENDPOINT}/shopify/createProduct`, {
+      const resp = await fetch(`${backend}${API.PRODUCT_CREATE}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          shop, 
-          accessToken: shopify_access_token, 
-          productData: form
-        }),
+        body: JSON.stringify({ shop, accessToken, productData: form }),
       });
+      if (!resp.ok) throw new Error("Product create failed");
+      const { product } = await resp.json();
 
-      if (response.ok) {
-        alert("Product created successfully!");
-        onSave?.();
-        onClose();
-      } else {
-        alert(`Failed to create product. Status: ${response.status}`);
+      // Upload images after product creation
+      if (imageFiles.length > 0) {
+        setUploading(true);
+        for (const file of imageFiles) {
+          const { attachment, filename } = await fileToAttachment(file);
+          await fetch(`${backend}${API.IMAGE_CREATE}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              shop,
+              accessToken,
+              productId: product.id,
+              imageData: { attachment, filename, alt: filename },
+            }),
+          });
+        }
+        setUploading(false);
       }
-    } catch (error) {
-      alert("Error creating product: " + error.message);
+
+      alert("Product created successfully!");
+      onSave?.();
+      onClose();
+    } catch (e) {
+      alert(e.message);
     } finally {
       setSaving(false);
+      setUploading(false);
     }
   };
 
@@ -745,65 +695,132 @@ const ProductAddModal = ({ onClose, onSave }) => {
         
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold">Add New Product</h2>
-          <Button onClick={handleAdd} disabled={saving}>
+          <Button onClick={handleAdd} disabled={saving || uploading}>
             <Plus className="h-4 w-4 mr-2" />
-            {saving ? "Creating..." : "Create Product"}
+            {saving ? (uploading ? "Uploading images..." : "Creating...") : "Create Product"}
           </Button>
         </div>
 
         <div className="space-y-4">
-            <Input
-              placeholder="Product Title"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-            />
-            <Input
-              placeholder="Vendor"
-              value={form.vendor}
-              onChange={(e) => setForm({ ...form, vendor: e.target.value })}
-            />
-            <Input
-              placeholder="Product Type"
-              value={form.product_type}
-              onChange={(e) => setForm({ ...form, product_type: e.target.value })}
-            />
-            <Input
-              placeholder="Price"
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: e.target.value })}
-            />
-            <Input
-              placeholder="SKU"
-              value={form.sku}
-              onChange={(e) => setForm({ ...form, sku: e.target.value })}
-            />
+          {imagePreviews.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">
-                Inventory Quantity
-              </label>
-              <Input
-                type="number"
-                value={form.inventory_quantity}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    inventory_quantity: parseInt(e.target.value) || 0,
-                  })
-                }
-              />
+              <p className="text-sm font-medium mb-2">Selected Images</p>
+              <div className="grid grid-cols-3 gap-2">
+                {imagePreviews.map((preview, index) => (
+                  <div key={index} className="relative h-20 bg-slate-100 rounded-lg overflow-hidden">
+                    <img src={preview} alt={`Preview ${index + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      onClick={() => removeImage(index)}
+                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
-            <Textarea
-              placeholder="Description (HTML)"
-              rows={5}
-              value={form.body_html}
-              onChange={(e) => setForm({ ...form, body_html: e.target.value })}
-            />
-          </div>
-      </div>
+          )}
 
+          <Input
+            placeholder="Product Title"
+            value={form.title}
+            onChange={(e) => setForm({...form, title: e.target.value})}
+          />
+          <Input
+            placeholder="Vendor"
+            value={form.vendor}
+            onChange={(e) => setForm({...form, vendor: e.target.value})}
+          />
+          <Input
+            placeholder="Product Type"
+            value={form.product_type}
+            onChange={(e) => setForm({...form, product_type: e.target.value})}
+          />
+          <Input
+            placeholder="Price"
+            value={form.price}
+            onChange={(e) => setForm({...form, price: e.target.value})}
+          />
+          <Input
+            placeholder="SKU"
+            value={form.sku}
+            onChange={(e) => setForm({...form, sku: e.target.value})}
+          />
+          <Input
+            placeholder="Inventory Quantity"
+            type="number"
+            value={form.inventory_quantity}
+            onChange={(e) => setForm({...form, inventory_quantity: parseInt(e.target.value) || 0})}
+          />
+          <Textarea
+            placeholder="Description (HTML)"
+            value={form.body_html}
+            onChange={(e) => setForm({...form, body_html: e.target.value})}
+          />
+          
+          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+            <ImageIcon className="h-4 w-4" />
+            <span>Product Images</span>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleUpload}
+            />
+          </label>
+        </div>
+      </div>
     </div>
   );
 };
 
-export default Products;
 
+async function resolveShopAndToken() {
+  const email = localStorage.getItem("user_email");
+  const userType = localStorage.getItem("user_type");
+  let shop, accessToken;
+
+  if (userType === "sub_user") {
+    const { data: subUser } = await supabase
+      .from("sub_users")
+      .select("owner_id")
+      .eq("email", email)
+      .single();
+    const { data: shopRow } = await supabase
+      .from("shops")
+      .select("shopify_domain, shopify_access_token")
+      .eq("user_id", subUser.owner_id)
+      .single();
+    shop = shopRow?.shopify_domain;
+    accessToken = shopRow?.shopify_access_token;
+  } else {
+    const { data: user } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", email)
+      .single();
+    const { data: shopRow } = await supabase
+      .from("shops")
+      .select("shopify_domain, shopify_access_token")
+      .eq("user_id", user.id)
+      .single();
+    shop = shopRow?.shopify_domain;
+    accessToken = shopRow?.shopify_access_token;
+  }
+  return { shop, accessToken };
+}
+
+function fileToAttachment(file: File): Promise<{ attachment: string; filename: string }> {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      res({ attachment: base64, filename: file.name });
+    };
+    reader.onerror = rej;
+    reader.readAsDataURL(file);
+  });
+}
+
+export default Products;

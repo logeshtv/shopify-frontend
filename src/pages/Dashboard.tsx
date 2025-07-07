@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart3,
   Package,
@@ -18,20 +17,19 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  TrendingUp,
   Globe,
-  Users,
-  DollarSign,
   ArrowUp,
   ArrowDown,
   Bell,
-  Settings,
-  LogOut,
+  Plus,
 } from "lucide-react";
 import { DashboardNavigation } from "@/components/DashboardNavigation";
 import { supabase } from "../lib/supabaseClient";
 
 const Dashboard = () => {
+  // ────────────────────────────────────────────────
+  // State
+  // ────────────────────────────────────────────────
   const [syncProgress, setSyncProgress] = useState(0);
   const [shopData, setShopData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -40,129 +38,87 @@ const Dashboard = () => {
   const [userName, setUserName] = useState("");
   const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
 
+  // ────────────────────────────────────────────────
+  // Fetch data on mount
+  // ────────────────────────────────────────────────
   useEffect(() => {
-    const fetchShopifyData = async () => {
+    const fetchData = async () => {
       setLoading(true);
-      setError("");
       try {
-        const email = localStorage.getItem("user_email");
-        const userType = localStorage.getItem("user_type");
-        if (!email) {
-          setError("User not logged in");
-          setLoading(false);
-          return;
-        }
-        let shop = null;
-        let shopify_access_token = null;
-        let displayName = "";
-        if (userType === "sub_user") {
-          // Fetch sub_user, then their owner (admin)
-          const { data: subUser, error: subUserError } = await supabase
-            .from("sub_users")
-            .select("id, name, owner_id")
-            .eq("email", email)
-            .single();
-          if (subUserError || !subUser) {
-            setError("Sub-user not found");
-            setLoading(false);
-            return;
-          }
-          displayName = subUser.name || "";
-          // Fetch admin's shop
-          const { data: shopRow, error: shopError } = await supabase
-            .from("shops")
-            .select("shopify_domain, shopify_access_token")
-            .eq("user_id", subUser.owner_id)
-            .single();
-          if (shopError || !shopRow) {
-            setError("Shop not found");
-            setLoading(false);
-            return;
-          }
-          shop = shopRow.shopify_domain;
-          shopify_access_token = shopRow.shopify_access_token;
-        } else {
-          // Admin user
-          const { data: user, error: userError } = await supabase
-            .from("users")
-            .select("id, name")
-            .eq("email", email)
-            .single();
-          if (userError || !user) {
-            setError("User not found");
-            setLoading(false);
-            return;
-          }
-          displayName = user.name || "";
-          const { data: shopRow, error: shopError } = await supabase
-            .from("shops")
-            .select("shopify_domain, shopify_access_token")
-            .eq("user_id", user.id)
-            .single();
-          if (shopError || !shopRow) {
-            setError("Shop not found");
-            setLoading(false);
-            return;
-          }
-          shop = shopRow.shopify_domain;
-          shopify_access_token = shopRow.shopify_access_token;
-        }
-        if (!shopify_access_token) {
-          setError(
-            "Shopify access token not found. Please reconnect your store."
-          );
-          setLoading(false);
-          return;
-        }
-        setUserName(displayName);
+        const { shop, accessToken } = await resolveShopAndToken();
 
-        // Fetch shop data from backend proxy
-        const response = await fetch(`${backend}/shopify/shop-info`, {
+        // Shop info
+        const shopRes = await fetch(`${backend}/shopify/shop-info`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            shop,
-            accessToken: shopify_access_token,
-          }),
+          body: JSON.stringify({ shop, accessToken }),
         });
-        if (!response.ok) {
-          throw new Error("Failed to fetch shop data from Shopify");
+        if (shopRes.ok) {
+          const shopData = await shopRes.json();
+          setShopData(shopData.shop);
         }
-        const shopifyData = await response.json();
-        setShopData(shopifyData.shop);
-        // Fetch products from backend
-        const productsRes = await fetch(`${backend}/shopify/products`, {
+
+        // Products
+        const productsRes = await fetch(`${backend}/shopify/getAllProducts`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            shop,
-            accessToken: shopify_access_token,
-          }),
+          body: JSON.stringify({ shop, accessToken }),
         });
         if (productsRes.ok) {
           const productsData = await productsRes.json();
           setProducts(productsData.products || []);
         }
-        setLoading(false);
+
+        // User name
+        const email = localStorage.getItem("user_email");
+        if (email) {
+          const { data: user } = await supabase
+            .from("users")
+            .select("name")
+            .eq("email", email)
+            .single();
+          setUserName(user?.name || "");
+        }
       } catch (err: any) {
-        setError(err.message || "Failed to load dashboard");
+        setError(err.message);
+      } finally {
         setLoading(false);
       }
     };
-    fetchShopifyData();
+
+    fetchData();
+  }, [backend]);
+
+  // ────────────────────────────────────────────────
+  // One‑time sync progress animation
+  // ────────────────────────────────────────────────
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSyncProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);   // stop forever
+          return 100;
+        }
+        return prev + 1;             // increment by 1 %
+      });
+    }, 40); // ≈ 4 s total (100 × 40 ms)
+
+    return () => clearInterval(interval); // cleanup on unmount
   }, []);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSyncProgress((prev) => (prev >= 100 ? 0 : prev + 10));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+  // ────────────────────────────────────────────────
+  // Derived metrics
+  // ────────────────────────────────────────────────
+  const totalProducts   = products.length;
+  const hsCoded         = products.filter((p) => p?.hs_code).length;
+  const needReview      = totalProducts - hsCoded;
+  const complianceScore =
+    totalProducts > 0 ? Math.round((hsCoded / totalProducts) * 100) : 0;
 
   const statsCards = [
     {
       title: "Total Products",
-      value: "1,247",
+      value: totalProducts.toString(),
       change: "+12%",
       changeType: "increase",
       icon: Package,
@@ -170,15 +126,15 @@ const Dashboard = () => {
     },
     {
       title: "Compliance Score",
-      value: "94%",
+      value: `${complianceScore}%`,
       change: "+3%",
       changeType: "increase",
       icon: CheckCircle,
       color: "green",
     },
     {
-      title: "Pending Reviews",
-      value: "23",
+      title: "Need Review",
+      value: needReview.toString(),
       change: "-8",
       changeType: "decrease",
       icon: Clock,
@@ -198,141 +154,75 @@ const Dashboard = () => {
     {
       title: "HS Code updated for Wireless Headphones",
       time: "2 minutes ago",
-      type: "update",
       status: "success",
     },
     {
       title: "Export documentation generated for EU shipment",
       time: "15 minutes ago",
-      type: "document",
       status: "success",
     },
     {
       title: "ESG risk alert: High carbon footprint detected",
       time: "1 hour ago",
-      type: "alert",
       status: "warning",
     },
     {
-      title: "Product sync completed: 156 items processed",
+      title: `Product sync completed: ${totalProducts} items processed`,
       time: "2 hours ago",
-      type: "sync",
       status: "success",
     },
   ];
 
   const upcomingTasks = [
-    {
-      title: "Review HS codes for Electronics category",
-      priority: "high",
-      dueDate: "Today",
-    },
-    {
-      title: "Update ESG documentation for Q4",
-      priority: "medium",
-      dueDate: "Tomorrow",
-    },
-    {
-      title: "Generate reports for customs audit",
-      priority: "low",
-      dueDate: "Next week",
-    },
+    { title: "Review HS codes for Electronics category", priority: "high",   dueDate: "Today" },
+    { title: "Update ESG documentation for Q4",           priority: "medium", dueDate: "Tomorrow" },
+    { title: "Generate reports for customs audit",        priority: "low",    dueDate: "Next week" },
   ];
 
+  // ────────────────────────────────────────────────
+  // Loading / error states
+  // ────────────────────────────────────────────────
   if (loading) {
     return (
-      <div style={{ padding: 40, textAlign: "center" }}>
-        Loading dashboard...
-      </div>
-    );
-  }
-  if (error && error !== "Shop not found") {
-    return (
-      <div style={{ padding: 40, textAlign: "center" }}>
-        <div style={{ color: "#dc2626", marginBottom: 16 }}>{error}</div>
-        <button
-          style={{
-            background: "#2563eb",
-            color: "white",
-            padding: "0.75rem 1.5rem",
-            borderRadius: "0.375rem",
-            fontWeight: 500,
-            border: "none",
-            cursor: "pointer",
-            marginBottom: 16,
-          }}
-          onClick={async () => {
-            setError("");
-            setLoading(true);
-            // Try to fetch user and shop again
-            const email = localStorage.getItem("user_email");
-            if (!email) {
-              setError("User not logged in");
-              setLoading(false);
-              return;
-            }
-            const { data: user } = await supabase
-              .from("users")
-              .select("id")
-              .eq("email", email)
-              .single();
-            if (!user) {
-              setError("User not found");
-              setLoading(false);
-              return;
-            }
-            // Try to find any shop for this user
-            const { data: shop } = await supabase
-              .from("shops")
-              .select("shopify_domain")
-              .eq("user_id", user.id)
-              .single();
-            if (shop && shop.shopify_domain) {
-              // Redirect to Shopify OAuth
-              const shopifyAuthUrl = `https://${
-                shop.shopify_domain
-              }/admin/oauth/authorize?client_id=${
-                import.meta.env.VITE_SHOPIFY_API_KEY
-              }&scope=read_products,write_products,read_orders,write_orders&redirect_uri=${encodeURIComponent(
-                import.meta.env.VITE_REDIRECT_URI || "/auth/callback"
-              )}&state=${Math.random().toString(36).substring(2, 15)}`;
-              window.location.href = shopifyAuthUrl;
-            } else {
-              setError(
-                "No shop domain found for this user. Please sign up again."
-              );
-              setLoading(false);
-            }
-          }}
-        >
-          Reconnect Store
-        </button>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">Loading dashboard...</div>
       </div>
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-600 mb-4">{error}</div>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ────────────────────────────────────────────────
+  // Main render
+  // ────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-50">
       <DashboardNavigation />
 
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Welcome Section */}
+        {/* Welcome */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            Welcome back, {userName ? userName : "Shopify User"}! 👋
+            Welcome back, {userName || "Shopify User"}! 👋
           </h1>
           <p className="text-slate-600">
             Here's what's happening with your compliance automation today.
           </p>
         </div>
 
-        {/* Stats Grid */}
+        {/* Stats grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {statsCards.map((stat, index) => (
-            <Card
-              key={index}
-              className="border-0 shadow-lg hover:shadow-xl transition-all duration-300"
-            >
+            <Card key={index} className="border-0 shadow-lg">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -366,130 +256,133 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* Main Content Grid */}
+        {/* Main grid */}
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Left Column */}
+          {/* Left column */}
           <div className="lg:col-span-2 space-y-8">
-            {/* Shopify Products */}
+            {/* Products overview */}
             <Card className="border-0 shadow-lg">
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Package className="h-5 w-5 mr-2 text-blue-600" />
-                  Your Shopify Products
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Package className="h-5 w-5 mr-2 text-blue-600" />
+                    Your Products ({totalProducts})
+                  </div>
+                  <Link to="/products">
+                    <Button size="sm">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Manage
+                    </Button>
+                  </Link>
                 </CardTitle>
                 <CardDescription>
-                  Showing the first 5 products from your store
+                  Recent products from your Shopify store
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {products.length === 0 ? (
-                  <div className="text-slate-500">No products found.</div>
+                  <div className="text-slate-500 text-center py-8">
+                    No products found. Sync your Shopify store to get started.
+                  </div>
                 ) : (
-                  <ul className="divide-y divide-slate-200">
-                    {products.map((product) => (
-                      <li
+                  <div className="space-y-3">
+                    {products.slice(0, 5).map((product) => (
+                      <div
                         key={product.id}
-                        className="py-3 flex items-center justify-between"
+                        className="flex items-center justify-between p-3 border border-slate-200 rounded-lg"
                       >
-                        <div>
-                          <div className="font-medium text-slate-900">
-                            {product.title}
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-slate-200 rounded-lg flex items-center justify-center overflow-hidden">
+                            {product?.image?.src ? (
+                              <img
+                                src={product.image.src}
+                                alt={product.title}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <Package className="h-5 w-5 text-slate-400" />
+                            )}
                           </div>
-                          <div className="text-xs text-slate-500">
-                            ID: {product.id}
+                          <div>
+                            <div className="font-medium text-slate-900 truncate">
+                              {product.title}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              ${product.variants?.[0]?.price || "0.00"}
+                            </div>
                           </div>
                         </div>
-                        {product.image && product.image.src && (
-                          <img
-                            src={product.image.src}
-                            alt={product.title}
-                            className="h-10 w-10 object-cover rounded"
-                          />
-                        )}
-                      </li>
+                        <Badge
+                          variant={product.hs_code ? "default" : "secondary"}
+                        >
+                          {product.hs_code ? "Coded" : "Pending"}
+                        </Badge>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 )}
               </CardContent>
             </Card>
-            {/* Sync Status */}
+
+            {/* Sync status */}
             <Card className="border-0 shadow-lg">
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Package className="h-5 w-5 mr-2 text-blue-600" />
-                  Shopify Product Sync
+                  Sync Status
                 </CardTitle>
-                <CardDescription>
-                  Real-time synchronization with your Shopify store
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-600">
-                      Sync Progress
-                    </span>
+                    <span className="text-sm text-slate-600">Progress</span>
                     <span className="text-sm font-medium">{syncProgress}%</span>
                   </div>
                   <Progress value={syncProgress} className="h-2" />
                   <div className="flex justify-between text-sm text-slate-600">
-                    <span>Last sync: 2 hours ago</span>
-                    <span>1,247 products synced</span>
+                    <span>Last sync: a sec ago</span>
+                    <span>{totalProducts} products synced</span>
                   </div>
-                  <Button variant="outline" size="sm" className="w-full">
-                    Sync Now
-                  </Button>
                 </div>
               </CardContent>
             </Card>
-            {/* Quick Actions */}
+
+            {/* Quick actions */}
             <Card className="border-0 shadow-lg">
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
-                <CardDescription>Common tasks and workflows</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-4">
                   <Link to="/products">
-                    <Button
-                      variant="outline"
-                      className="w-full h-20 flex flex-col"
-                    >
+                    <Button variant="outline" className="w-full h-20 flex flex-col">
                       <Package className="h-6 w-6 mb-2" />
-                      <span>Manage Products</span>
+                      <span>Products</span>
                     </Button>
                   </Link>
                   <Link to="/hs-codes">
-                    <Button
-                      variant="outline"
-                      className="w-full h-20 flex flex-col"
-                    >
+                    <Button variant="outline" className="w-full h-20 flex flex-col">
                       <BarChart3 className="h-6 w-6 mb-2" />
-                      <span>HS Code Detection</span>
+                      <span>HS Codes</span>
                     </Button>
                   </Link>
                   <Link to="/documents">
-                    <Button
-                      variant="outline"
-                      className="w-full h-20 flex flex-col"
-                    >
+                    <Button variant="outline" className="w-full h-20 flex flex-col">
                       <FileText className="h-6 w-6 mb-2" />
-                      <span>Export Docs</span>
+                      <span>Documents</span>
                     </Button>
                   </Link>
                   <Link to="/esg">
-                    <Button
-                      variant="outline"
-                      className="w-full h-20 flex flex-col"
-                    >
+                    <Button variant="outline" className="w-full h-20 flex flex-col">
                       <Globe className="h-6 w-6 mb-2" />
-                      <span>ESG Risk Panel</span>
+                      <span>ESG Risk</span>
                     </Button>
                   </Link>
                 </div>
               </CardContent>
             </Card>
-            {/* Recent Activity */}
+
+            {/* Recent activity */}
             <Card className="border-0 shadow-lg">
               <CardHeader>
                 <CardTitle className="flex items-center">
@@ -510,13 +403,11 @@ const Dashboard = () => {
                             : "bg-red-500"
                         }`}
                       />
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1">
                         <p className="text-sm font-medium text-slate-900">
                           {activity.title}
                         </p>
-                        <p className="text-xs text-slate-600">
-                          {activity.time}
-                        </p>
+                        <p className="text-xs text-slate-600">{activity.time}</p>
                       </div>
                     </div>
                   ))}
@@ -525,9 +416,9 @@ const Dashboard = () => {
             </Card>
           </div>
 
-          {/* Right Column */}
+          {/* Right column */}
           <div className="space-y-8">
-            {/* Compliance Overview */}
+            {/* Compliance overview */}
             <Card className="border-0 shadow-lg">
               <CardHeader>
                 <CardTitle className="flex items-center">
@@ -542,9 +433,11 @@ const Dashboard = () => {
                       <span className="text-sm text-slate-600">
                         HS Code Coverage
                       </span>
-                      <span className="text-sm font-medium">94%</span>
+                      <span className="text-sm font-medium">
+                        {complianceScore}%
+                      </span>
                     </div>
-                    <Progress value={94} className="h-2" />
+                    <Progress value={complianceScore} className="h-2" />
                   </div>
                   <div>
                     <div className="flex justify-between items-center mb-2">
@@ -568,7 +461,7 @@ const Dashboard = () => {
               </CardContent>
             </Card>
 
-            {/* Risk Alerts */}
+            {/* Risk alerts */}
             <Card className="border-0 shadow-lg">
               <CardHeader>
                 <CardTitle className="flex items-center">
@@ -596,7 +489,7 @@ const Dashboard = () => {
                         Missing HS Code
                       </p>
                       <p className="text-xs text-yellow-700">
-                        23 products need classification
+                        {needReview} products need classification
                       </p>
                     </div>
                   </div>
@@ -615,7 +508,7 @@ const Dashboard = () => {
               </CardContent>
             </Card>
 
-            {/* Upcoming Tasks */}
+            {/* Upcoming tasks */}
             <Card className="border-0 shadow-lg">
               <CardHeader>
                 <CardTitle className="flex items-center">
@@ -660,5 +553,40 @@ const Dashboard = () => {
     </div>
   );
 };
+
+async function resolveShopAndToken() {
+  const email = localStorage.getItem("user_email");
+  const userType = localStorage.getItem("user_type");
+  let shop, accessToken;
+
+  if (userType === "sub_user") {
+    const { data: subUser } = await supabase
+      .from("sub_users")
+      .select("owner_id")
+      .eq("email", email)
+      .single();
+    const { data: shopRow } = await supabase
+      .from("shops")
+      .select("shopify_domain, shopify_access_token")
+      .eq("user_id", subUser.owner_id)
+      .single();
+    shop = shopRow?.shopify_domain;
+    accessToken = shopRow?.shopify_access_token;
+  } else {
+    const { data: user } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", email)
+      .single();
+    const { data: shopRow } = await supabase
+      .from("shops")
+      .select("shopify_domain, shopify_access_token")
+      .eq("user_id", user.id)
+      .single();
+    shop = shopRow?.shopify_domain;
+    accessToken = shopRow?.shopify_access_token;
+  }
+  return { shop, accessToken };
+}
 
 export default Dashboard;

@@ -24,13 +24,16 @@ import { supabase } from "../lib/supabaseClient";
 const HSCodes = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [isDetecting, setIsDetecting] = useState(false);
+  // Replace the global isDetecting state with a state that tracks which product is being detected
+  const [detectingProductId, setDetectingProductId] = useState(null);
   const [detectionProgress, setDetectionProgress] = useState(0);
   
   // New states for API integration
   const [pendingProducts, setPendingProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Add new state to track processed products
+  const [processedProductIds, setProcessedProductIds] = useState([]);
   
   const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
 
@@ -195,7 +198,8 @@ const HSCodes = () => {
   }, []);
 
   const handleAIDetection = async (productId) => {
-    setIsDetecting(true);
+    // Set the specific product ID that's being detected
+    setDetectingProductId(productId);
     setDetectionProgress(0);
     
     // Simulate AI detection process
@@ -203,7 +207,10 @@ const HSCodes = () => {
       setDetectionProgress(prev => {
         if (prev >= 100) {
           clearInterval(interval);
-          setIsDetecting(false);
+          // Clear the detecting product ID
+          setDetectingProductId(null);
+          // Mark this product as processed when detection is complete
+          setProcessedProductIds(prevIds => [...prevIds, productId]);
           return 100;
         }
         return prev + 10;
@@ -228,7 +235,6 @@ const HSCodes = () => {
 
   // Rest of the component remains unchanged
   return (
-    // The existing JSX return statement
     <div className="min-h-screen bg-slate-50">
       <DashboardNavigation />
       
@@ -304,10 +310,9 @@ const HSCodes = () => {
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Left Column - Pending Classifications */}
           <div className="lg:col-span-2 space-y-6">
-            {/* AI Detection Status */}
-            {isDetecting && (
+            {/* AI Detection Status - Only show if there's an active detection */}
+            {detectingProductId && (
               <Card className="border-0 shadow-lg border-blue-200 bg-blue-50">
                 <CardContent className="p-6">
                   <div className="flex items-center space-x-3 mb-4">
@@ -350,55 +355,73 @@ const HSCodes = () => {
                           <div className="flex-1">
                             <h3 className="font-medium text-slate-900 mb-1">{product.name}</h3>
                             <p className="text-sm text-slate-600 mb-2">{product.description}</p>
-                            <Badge variant="outline">{product.category}</Badge>
+                            {processedProductIds.includes(product.id) && (
+                              <Badge variant="outline">{product.category}</Badge>
+                            )}
                           </div>
                           <Button 
                             size="sm" 
                             onClick={() => handleAIDetection(product.id)}
-                            disabled={isDetecting}
+                            disabled={detectingProductId === product.id || processedProductIds.includes(product.id)}
                             className="bg-gradient-to-r from-blue-600 to-purple-600"
                           >
-                            <Zap className="h-4 w-4 mr-1" />
-                            Detect
+                            {detectingProductId === product.id ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                                Detecting...
+                              </>
+                            ) : processedProductIds.includes(product.id) ? (
+                              <>
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Detected
+                              </>
+                            ) : (
+                              <>
+                                <Zap className="h-4 w-4 mr-1" />
+                                Detect
+                              </>
+                            )}
                           </Button>
                         </div>
 
-                        {/* AI Suggestions */}
-                        <div className="bg-slate-50 rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-slate-700">AI Suggestion</span>
-                            <Badge className={getConfidenceColor(product.confidence)}>
-                              {product.confidence}% confidence
-                            </Badge>
-                          </div>
-                          <div className="text-lg font-mono text-slate-900 mb-3">{product.suggestedCode}</div>
-                          
-                          {/* Alternative codes */}
-                          <div className="space-y-2">
-                            <span className="text-xs text-slate-600">Alternative classifications:</span>
-                            {product.alternativeCodes.map((alt, index) => (
-                              <div key={index} className="flex items-center justify-between text-sm">
-                                <span className="font-mono text-slate-700">{alt.code}</span>
-                                <span className="text-slate-600">{alt.confidence}%</span>
-                              </div>
-                            ))}
-                          </div>
+                        {/* Only show AI Suggestions after detection */}
+                        {processedProductIds.includes(product.id) && (
+                          <div className="bg-slate-50 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-slate-700">AI Suggestion</span>
+                              <Badge className={getConfidenceColor(product.confidence)}>
+                                {product.confidence}% confidence
+                              </Badge>
+                            </div>
+                            <div className="text-lg font-mono text-slate-900 mb-3">{product.suggestedCode}</div>
+                            
+                            {/* Alternative codes */}
+                            <div className="space-y-2">
+                              <span className="text-xs text-slate-600">Alternative classifications:</span>
+                              {product.alternativeCodes.map((alt, index) => (
+                                <div key={index} className="flex items-center justify-between text-sm">
+                                  <span className="font-mono text-slate-700">{alt.code}</span>
+                                  <span className="text-slate-600">{alt.confidence}%</span>
+                                </div>
+                              ))}
+                            </div>
 
-                          <div className="flex space-x-2 mt-3">
-                            <Button size="sm" variant="outline">
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              Approve
-                            </Button>
-                            <Button size="sm" variant="outline">
-                              <Edit className="h-4 w-4 mr-1" />
-                              Modify
-                            </Button>
-                            <Button size="sm" variant="outline">
-                              <Eye className="h-4 w-4 mr-1" />
-                              Details
-                            </Button>
+                            <div className="flex space-x-2 mt-3">
+                              <Button size="sm" variant="outline">
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Approve
+                              </Button>
+                              <Button size="sm" variant="outline">
+                                <Edit className="h-4 w-4 mr-1" />
+                                Modify
+                              </Button>
+                              <Button size="sm" variant="outline">
+                                <Eye className="h-4 w-4 mr-1" />
+                                Details
+                              </Button>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     ))
                   )}

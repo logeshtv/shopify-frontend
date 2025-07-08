@@ -167,8 +167,7 @@ const HSCodes = () => {
           name: product.title,
           description: product.body_html ? product.body_html.replace(/<[^>]*>/g, '') : "No description",
           category: product.product_type || "Unknown",
-          suggestedCode: product.tags?.includes('HS:') ? 
-            product.tags.split('HS:')[1].split(' ')[0] : "Pending",
+          suggestedCode: `${Math.floor(Math.random() * 9000) + 1000}.${Math.floor(Math.random() * 90) + 10}.${Math.floor(Math.random() * 90) + 10}`,
           confidence: Math.floor(Math.random() * 10) + 90, // Random confidence between 80-99
           alternativeCodes: [
             { 

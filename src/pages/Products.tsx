@@ -331,8 +331,8 @@ const ProductViewModal = ({ productId, onClose }) => {
         });
         if (res.ok) {
           const data = await res.json();
-          setProduct(data.product);
-          setImages(data.product.images || []);
+          setProduct(data);
+          setImages(data.images || []);
         }
       } catch (e) {
         console.error(e);
@@ -385,12 +385,44 @@ const ProductViewModal = ({ productId, onClose }) => {
                 <div dangerouslySetInnerHTML={{ __html: product.body_html }} />
               </div>
             )}
+            
+            {product.hsCode && Object.keys(product.hsCode).length > 0 && (
+              <div className="border-t pt-4">
+                <h3 className="font-semibold text-slate-900 mb-2">HS Code Detection</h3>
+                <div className="space-y-2 text-sm">
+                  {product.hsCode.suggestedCode && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Suggested Code:</span>
+                      <span className="font-mono">{product.hsCode.suggestedCode}</span>
+                    </div>
+                  )}
+                  {product.hsCode.confidence && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Confidence:</span>
+                      <Badge className={product.hsCode.confidence >= 90 ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
+                        {product.hsCode.confidence}%
+                      </Badge>
+                    </div>
+                  )}
+                  {product.hsCode.status && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Status:</span>
+                      <Badge className="bg-green-100 text-green-800">
+                        {product.hsCode.status}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
     </div>
   );
 };
+
+
 
 const ProductEditModal = ({ productId, onClose, onSave }) => {
   const [loading, setLoading] = useState(true);
@@ -591,7 +623,7 @@ const ProductEditModal = ({ productId, onClose, onSave }) => {
               onChange={(e) => setForm({...form, inventory_quantity: parseInt(e.target.value) || 0})}
             />
             <Textarea
-              placeholder="Description (HTML)"
+              placeholder="Description "
               value={form.body_html}
               onChange={(e) => setForm({...form, body_html: e.target.value})}
               rows={3}
@@ -766,7 +798,7 @@ const ProductAddModal = ({ onClose, onSave }) => {
             onChange={(e) => setForm({...form, inventory_quantity: parseInt(e.target.value) || 0})}
           />
           <Textarea
-            placeholder="Description (HTML)"
+            placeholder="Description "
             value={form.body_html}
             onChange={(e) => setForm({...form, body_html: e.target.value})}
           />

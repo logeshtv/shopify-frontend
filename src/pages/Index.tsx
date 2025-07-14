@@ -92,7 +92,7 @@ const Index = () => {
           <h1 className="text-5xl md:text-7xl font-bold text-slate-900 mb-6 leading-tight">
             Automate Your
             <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              {" "}Shopify Compliance
+              {" "}Shopify Global Trade
             </span>
           </h1>
           

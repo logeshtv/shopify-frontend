@@ -18,6 +18,7 @@ import NotFound from "./pages/NotFound";
 import Signup from "./pages/Signup";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { PlanProvider } from "@/context/PlanContext";
+import LandedCostHistory from "./pages/LandedCostHistory";
 
 const queryClient = new QueryClient();
 
@@ -92,6 +93,20 @@ const App = () => (
                   ]}
                 >
                   <LandedCost />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/landed-cost-history"
+              element={
+                <ProtectedRoute
+                  requiredRoles={["admin", "manager"]}
+                  requiredPlans={[
+                    "price_1RcnpzQiUhrwJo9CVz7Wsug6",
+                    "price_1RcnqKQiUhrwJo9CCdhvD8Ep",
+                  ]}
+                >
+                  <LandedCostHistory />
                 </ProtectedRoute>
               }
             />

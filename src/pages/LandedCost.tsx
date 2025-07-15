@@ -750,7 +750,8 @@ const LandedCost = () => {
                           Product Subtotal:
                         </span>
                         <span className="font-medium">
-                          ${results.subtotal.toFixed(2)}
+                          {getCurrencySymbol(calculation.currency)}
+                          {formatNumber(results.subtotal)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -758,7 +759,8 @@ const LandedCost = () => {
                           Duty ({results.dutyRate.toFixed(1)}%):
                         </span>
                         <span className="font-medium">
-                          ${results.dutyAmount.toFixed(2)}
+                          {getCurrencySymbol(calculation.currency)}
+                          {formatNumber(results.dutyAmount)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -766,20 +768,23 @@ const LandedCost = () => {
                           VAT ({results.vatRate.toFixed(1)}%):
                         </span>
                         <span className="font-medium">
-                          ${results.vatAmount.toFixed(2)}
+                          {getCurrencySymbol(calculation.currency)}
+                          {formatNumber(results.vatAmount)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-slate-700">Shipping:</span>
                         <span className="font-medium">
-                          ${results.shippingCost.toFixed(2)}
+                          {getCurrencySymbol(calculation.currency)}
+                          {formatNumber(results.shippingCost)}
                         </span>
                       </div>
                       {results.insurance > 0 && (
                         <div className="flex justify-between items-center">
                           <span className="text-slate-700">Insurance:</span>
                           <span className="font-medium">
-                            ${results.insurance.toFixed(2)}
+                            {getCurrencySymbol(calculation.currency)}
+                            {formatNumber(results.insurance)}
                           </span>
                         </div>
                       )}
@@ -791,7 +796,8 @@ const LandedCost = () => {
                             Total Landed Cost
                           </p>
                           <p className="text-3xl font-bold text-green-700">
-                            ${results.totalLandedCost.toFixed(2)}
+                            {getCurrencySymbol(calculation.currency)}
+                            {formatNumber(results.totalLandedCost)}
                           </p>
                         </div>
                       </div>

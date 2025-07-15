@@ -20,6 +20,7 @@ interface InvoiceGeneratorProps {
   onClose: () => void;
   onGenerated: (orderId: string) => void;
 }
+
 const generateInvoicePDF = async (orderData: any, shopData: any) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -136,11 +137,15 @@ const generateInvoicePDF = async (orderData: any, shopData: any) => {
   doc.setFont(undefined, 'italic');
   doc.text(shopData.name || 'Your Store', pageWidth - 20, curY, { align: 'right' });
 
-  // Save PDF
-  doc.save(`Invoice_${orderData.order_number || orderData.id}.pdf`);
+  // Instead of saving directly, get the PDF as buffer
+  const pdfBuffer = doc.output('arraybuffer');
+  
+  // Generate filename
+  const fileName = `Invoice_${orderData.order_number || orderData.id}_${Date.now()}.pdf`;
+  
+  // Return both the buffer and filename
+  return { pdfBuffer, fileName, doc };
 };
-
-
 
 const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order, onClose, onGenerated }) => {
   if (!order) return null;
@@ -198,11 +203,39 @@ const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order, onClose, onG
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Order data:', data.order);
-        console.log('Shop data:', data.shop);
-        await generateInvoicePDF(data.order, data.shop);
-        onGenerated(order.id);
-        onClose();
+        
+        // Generate PDF
+        const { pdfBuffer, fileName, doc } = await generateInvoicePDF(data.order, data.shop);
+        
+        // Save locally for user
+        doc.save(`Invoice_${data.order.order_number || data.order.id}.pdf`);
+        
+        // Upload to S3 and save to Supabase
+        const uploadResponse = await fetch(`${backend}/shopify/invoices/save`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shop,
+            accessToken: shopify_access_token,
+            orderId: order.id,
+            orderData: data.order,
+            pdfBuffer: Array.from(new Uint8Array(pdfBuffer)),
+            fileName
+          }),
+        });
+        
+        if (uploadResponse.ok) {
+          const uploadData = await uploadResponse.json();
+          console.log('Invoice saved:', uploadData.invoiceUrl);
+          onGenerated(order.id);
+          onClose();
+        } else {
+          const errorData = await uploadResponse.json();
+          console.error('Failed to save invoice:', errorData);
+          // Still consider it successful since the user has the PDF
+          onGenerated(order.id);
+          onClose();
+        }
       } else {
         const errorData = await response.json();
         console.error('Failed to fetch order details:', errorData);

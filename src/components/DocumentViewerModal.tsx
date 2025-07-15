@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -9,7 +10,13 @@ interface Props {
 
 /** Simple full‑screen viewer for a single PDF file */
 const DocumentViewerModal: React.FC<Props> = ({ url, title, onClose }) => {
+  const [error, setError] = useState<string | null>(null);
+  
   if (!url) return null;
+  
+  // Create a proxy URL through our backend
+  const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
+  const proxyUrl = `${backend}/shopify/documents/view?documentUrl=${encodeURIComponent(url)}`;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
@@ -24,13 +31,27 @@ const DocumentViewerModal: React.FC<Props> = ({ url, title, onClose }) => {
 
         {/* PDF frame */}
         <iframe
-          src={url}
+          src={proxyUrl}
           title={title}
           className="flex-1 w-full"
           style={{ border: "none" }}
+          onError={() => setError("Failed to load document")}
         />
+        
+        {error && (
+          <div className="p-4 text-center bg-red-50 border-t border-red-200">
+            <p className="text-red-600">{error}</p>
+            <Button 
+              className="mt-2" 
+              size="sm"
+              onClick={() => window.open(proxyUrl, '_blank')}
+            >
+              Try Download Instead
+            </Button>
+          </div>
+        )}
       </div>
-    </div>
+    </div>  
   );
 };
 

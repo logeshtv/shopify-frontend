@@ -1,24 +1,30 @@
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  BarChart3, 
-  Search, 
-  Zap, 
-  CheckCircle, 
-  AlertTriangle, 
-  RefreshCw, 
+import {
+  BarChart3,
+  Search,
+  Zap,
+  CheckCircle,
+  AlertTriangle,
+  RefreshCw,
   Upload,
   Download,
   Eye,
   Edit,
   Brain,
   X,
-  Filter
+  Filter,
 } from "lucide-react";
 import { DashboardNavigation } from "@/components/DashboardNavigation";
 import { supabase } from "../lib/supabaseClient";
@@ -44,7 +50,6 @@ const HSCodes = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [savingModification, setSavingModification] = useState(false);
 
-  
   const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
 
   const recentClassifications = [
@@ -54,7 +59,7 @@ const HSCodes = () => {
       hsCode: "8518.22.00",
       confidence: 96,
       status: "approved",
-      classifiedAt: "2 hours ago"
+      classifiedAt: "2 hours ago",
     },
     {
       id: "2",
@@ -62,7 +67,7 @@ const HSCodes = () => {
       hsCode: "6205.20.20",
       confidence: 94,
       status: "approved",
-      classifiedAt: "4 hours ago"
+      classifiedAt: "4 hours ago",
     },
     {
       id: "3",
@@ -70,40 +75,49 @@ const HSCodes = () => {
       hsCode: "4202.21.60",
       confidence: 89,
       status: "review",
-      classifiedAt: "6 hours ago"
-    }
+      classifiedAt: "6 hours ago",
+    },
   ];
 
   // Get HS status from product state
   const getHSStatus = (product) => {
-    if (approvedProductIds.includes(product.id)) return 'approved';
-    if (modifiedProductIds.includes(product.id)) return 'modified';
-    return product.hsStatus || 'pending';
+    if (approvedProductIds.includes(product.id)) return "approved";
+    if (modifiedProductIds.includes(product.id)) return "modified";
+    return product.hsStatus || "pending";
   };
 
   // Filter products based on status
   const filteredProducts = useMemo(() => {
     let filtered = pendingProducts;
-    
+
     if (statusFilter !== "all") {
-      filtered = pendingProducts.filter(product => getHSStatus(product) === statusFilter);
-    }
-    
-    if (searchTerm) {
-      filtered = filtered.filter(product =>
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = pendingProducts.filter(
+        (product) => getHSStatus(product) === statusFilter
       );
     }
-    
+
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (product) =>
+          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          product.description.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
     return filtered;
-  }, [pendingProducts, statusFilter, searchTerm, approvedProductIds, modifiedProductIds]);
+  }, [
+    pendingProducts,
+    statusFilter,
+    searchTerm,
+    approvedProductIds,
+    modifiedProductIds,
+  ]);
 
   const fetchCounts = async () => {
     try {
       const email = localStorage.getItem("user_email");
       const userType = localStorage.getItem("user_type");
-      
+
       let shop, shopify_access_token;
       if (userType === "sub_user") {
         const { data: subUser } = await supabase
@@ -111,13 +125,13 @@ const HSCodes = () => {
           .select("owner_id")
           .eq("email", email)
           .single();
-        
+
         const { data: shopRow } = await supabase
           .from("shops")
           .select("shopify_domain, shopify_access_token")
           .eq("user_id", subUser.owner_id)
           .single();
-        
+
         shop = shopRow.shopify_domain;
         shopify_access_token = shopRow.shopify_access_token;
       } else {
@@ -126,13 +140,13 @@ const HSCodes = () => {
           .select("id")
           .eq("email", email)
           .single();
-        
+
         const { data: shopRow } = await supabase
           .from("shops")
           .select("shopify_domain, shopify_access_token")
           .eq("user_id", user.id)
           .single();
-        
+
         shop = shopRow.shopify_domain;
         shopify_access_token = shopRow.shopify_access_token;
       }
@@ -152,7 +166,7 @@ const HSCodes = () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ shop, accessToken: shopify_access_token }),
-        })
+        }),
       ]);
 
       if (pendingRes.ok) {
@@ -184,35 +198,35 @@ const HSCodes = () => {
           setLoading(false);
           return;
         }
-        
+
         let shop = null;
         let shopify_access_token = null;
-        
+
         if (userType === "sub_user") {
           const { data: subUser, error: subUserError } = await supabase
             .from("sub_users")
             .select("id, name, owner_id")
             .eq("email", email)
             .single();
-            
+
           if (subUserError || !subUser) {
             setError("Sub-user not found");
             setLoading(false);
             return;
           }
-          
+
           const { data: shopRow, error: shopError } = await supabase
             .from("shops")
             .select("shopify_domain, shopify_access_token")
             .eq("user_id", subUser.owner_id)
             .single();
-            
+
           if (shopError || !shopRow) {
             setError("Shop not found");
             setLoading(false);
             return;
           }
-          
+
           shop = shopRow.shopify_domain;
           shopify_access_token = shopRow.shopify_access_token;
         } else {
@@ -221,31 +235,33 @@ const HSCodes = () => {
             .select("id")
             .eq("email", email)
             .single();
-            
+
           if (userError || !user) {
             setError("User not found");
             setLoading(false);
             return;
           }
-          
+
           const { data: shopRow, error: shopError } = await supabase
             .from("shops")
             .select("shopify_domain, shopify_access_token")
             .eq("user_id", user.id)
             .single();
-            
+
           if (shopError || !shopRow) {
             setError("Shop not found");
             setLoading(false);
             return;
           }
-          
+
           shop = shopRow.shopify_domain;
           shopify_access_token = shopRow.shopify_access_token;
         }
-        
+
         if (!shopify_access_token) {
-          setError("Shopify access token not found. Please reconnect your store.");
+          setError(
+            "Shopify access token not found. Please reconnect your store."
+          );
           setLoading(false);
           return;
         }
@@ -256,38 +272,51 @@ const HSCodes = () => {
           body: JSON.stringify({
             shop,
             accessToken: shopify_access_token,
-            filter: statusFilter === "all" ? null : `hs_${statusFilter}`
+            filter: statusFilter === "all" ? null : `hs_${statusFilter}`,
           }),
         });
-        
+
         if (!productsRes.ok) {
           throw new Error("Failed to fetch products from Shopify");
         }
-        
+
         const productsData = await productsRes.json();
-        
-        const formattedProducts = (productsData.products || []).map(product => ({
-          id: product.id,
-          name: product.title,
-          description: product.body_html ? product.body_html.replace(/<[^>]*>/g, '') : "No description",
-          category: product.product_type || "Unknown",
-          suggestedCode: product.hsCode || `${Math.floor(Math.random() * 9000) + 1000}.${Math.floor(Math.random() * 90) + 10}.${Math.floor(Math.random() * 90) + 10}`,
-          confidence: product.confidence || Math.floor(Math.random() * 10) + 90,
-          hsStatus: product.hsStatus || 'pending',
-          alternativeCodes: [
-            { 
-              code: `${Math.floor(Math.random() * 9000) + 1000}.${Math.floor(Math.random() * 90) + 10}.${Math.floor(Math.random() * 90) + 10}`,
-              confidence: Math.floor(Math.random() * 15) + 75,
-              description: "Alternative classification" 
-            },
-            { 
-              code: `${Math.floor(Math.random() * 9000) + 1000}.${Math.floor(Math.random() * 90) + 10}.${Math.floor(Math.random() * 90) + 10}`,
-              confidence: Math.floor(Math.random() * 10) + 75,
-              description: "Alternative classification" 
-            }
-          ]
-        }));
-        
+
+        const formattedProducts = (productsData.products || []).map(
+          (product) => ({
+            id: product.id,
+            name: product.title,
+            description: product.body_html
+              ? product.body_html.replace(/<[^>]*>/g, "")
+              : "No description",
+            category: product.product_type || "Unknown",
+            suggestedCode:
+              product.hsCode ||
+              `${Math.floor(Math.random() * 9000) + 1000}.${
+                Math.floor(Math.random() * 90) + 10
+              }.${Math.floor(Math.random() * 90) + 10}`,
+            confidence:
+              product.confidence || Math.floor(Math.random() * 10) + 90,
+            hsStatus: product.hsStatus || "pending",
+            alternativeCodes: [
+              {
+                code: `${Math.floor(Math.random() * 9000) + 1000}.${
+                  Math.floor(Math.random() * 90) + 10
+                }.${Math.floor(Math.random() * 90) + 10}`,
+                confidence: Math.floor(Math.random() * 15) + 75,
+                description: "Alternative classification",
+              },
+              {
+                code: `${Math.floor(Math.random() * 9000) + 1000}.${
+                  Math.floor(Math.random() * 90) + 10
+                }.${Math.floor(Math.random() * 90) + 10}`,
+                confidence: Math.floor(Math.random() * 10) + 75,
+                description: "Alternative classification",
+              },
+            ],
+          })
+        );
+
         setPendingProducts(formattedProducts);
         setLoading(false);
       } catch (err) {
@@ -296,314 +325,310 @@ const HSCodes = () => {
         setLoading(false);
       }
     };
-    
+
     fetchProducts();
     fetchCounts();
   }, [statusFilter]);
 
- // Update handleAIDetection function to use the correct API path
-// Update handleAIDetection function to use the correct API request format
-const handleAIDetection = async (productId) => {
-  try {
-    setDetectingProductId(productId);
-    setDetectionProgress(0);
-    
-    // Start progress animation
-    const interval = setInterval(() => {
-      setDetectionProgress(prev => {
-        if (prev >= 95) {
-          clearInterval(interval);
-          return 95;
-        }
-        return prev + 5;
+  // Update handleAIDetection function to use the correct API path
+  // Update handleAIDetection function to use the correct API request format
+  const handleAIDetection = async (productId) => {
+    try {
+      setDetectingProductId(productId);
+      setDetectionProgress(0);
+
+      // Start progress animation
+      const interval = setInterval(() => {
+        setDetectionProgress((prev) => {
+          if (prev >= 95) {
+            clearInterval(interval);
+            return 95;
+          }
+          return prev + 5;
+        });
+      }, 100);
+
+      // Get shop credentials
+      const email = localStorage.getItem("user_email");
+      const userType = localStorage.getItem("user_type");
+
+      let shop, shopify_access_token;
+      if (userType === "sub_user") {
+        const { data: subUser } = await supabase
+          .from("sub_users")
+          .select("owner_id")
+          .eq("email", email)
+          .single();
+
+        const { data: shopRow } = await supabase
+          .from("shops")
+          .select("shopify_domain, shopify_access_token")
+          .eq("user_id", subUser.owner_id)
+          .single();
+
+        shop = shopRow.shopify_domain;
+        shopify_access_token = shopRow.shopify_access_token;
+      } else {
+        const { data: user } = await supabase
+          .from("users")
+          .select("id")
+          .eq("email", email)
+          .single();
+
+        const { data: shopRow } = await supabase
+          .from("shops")
+          .select("shopify_domain, shopify_access_token")
+          .eq("user_id", user.id)
+          .single();
+
+        shop = shopRow.shopify_domain;
+        shopify_access_token = shopRow.shopify_access_token;
+      }
+
+      // Call API to detect HS code
+      const response = await fetch(`${backend}/dutify/hs-code/detectProduct`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shop,
+          accessToken: shopify_access_token,
+          productId,
+        }),
       });
-    }, 100);
-    
-    // Get shop credentials
-    const email = localStorage.getItem("user_email");
-    const userType = localStorage.getItem("user_type");
-    
-    let shop, shopify_access_token;
-    if (userType === "sub_user") {
-      const { data: subUser } = await supabase
-        .from("sub_users")
-        .select("owner_id")
-        .eq("email", email)
-        .single();
-      
-      const { data: shopRow } = await supabase
-        .from("shops")
-        .select("shopify_domain, shopify_access_token")
-        .eq("user_id", subUser.owner_id)
-        .single();
-      
-      shop = shopRow.shopify_domain;
-      shopify_access_token = shopRow.shopify_access_token;
-    } else {
-      const { data: user } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email", email)
-        .single();
-      
-      const { data: shopRow } = await supabase
-        .from("shops")
-        .select("shopify_domain, shopify_access_token")
-        .eq("user_id", user.id)
-        .single();
-      
-      shop = shopRow.shopify_domain;
-      shopify_access_token = shopRow.shopify_access_token;
-    }
-    
-    // Call API to detect HS code
-    const response = await fetch(`${backend}/dutify/hs-code/detectProduct`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        shop,
-        accessToken: shopify_access_token,
-        productId
-      }),
-    });
-    
-    if (!response.ok) {
-      throw new Error("Failed to detect HS code");
-    }
-    
-    const data = await response.json();
-    
-    if (!data.success) {
-      throw new Error(data.error || "Detection failed");
-    }
-    
-    // Update product in state
-    // setPendingProducts(prev => 
-    //   prev.map(p => 
-    //     p.id === productId 
-    //       ? { 
-    //           ...p, 
-    //           suggestedCode: data.suggestedCode,
-    //           confidence: data.confidence,
-    //           alternativeCodes: data.alternativeCodes || [],
-    //           hsStatus: 'pending'
-    //         }
-    //       : p
-    //   )
-    // );
-    
-    setPendingProducts(prev => 
-      prev.map(p => 
-        p.id === productId 
-          ? { 
-              ...p, 
-              suggestedCode: data.suggestedCode,
-              confidence: data.confidence,
-              hsStatus: 'pending'
-            }
-          : p
-      )
-    );
 
-    // Complete progress and mark as processed
-    setDetectionProgress(100);
-    setTimeout(() => {
+      if (!response.ok) {
+        throw new Error("Failed to detect HS code");
+      }
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Detection failed");
+      }
+
+      // Update product in state
+      // setPendingProducts(prev =>
+      //   prev.map(p =>
+      //     p.id === productId
+      //       ? {
+      //           ...p,
+      //           suggestedCode: data.suggestedCode,
+      //           confidence: data.confidence,
+      //           alternativeCodes: data.alternativeCodes || [],
+      //           hsStatus: 'pending'
+      //         }
+      //       : p
+      //   )
+      // );
+
+      setPendingProducts((prev) =>
+        prev.map((p) =>
+          p.id === productId
+            ? {
+                ...p,
+                suggestedCode: data.suggestedCode,
+                confidence: data.confidence,
+                hsStatus: "pending",
+              }
+            : p
+        )
+      );
+
+      // Complete progress and mark as processed
+      setDetectionProgress(100);
+      setTimeout(() => {
+        setDetectingProductId(null);
+        setProcessedProductIds((prevIds) => [...prevIds, productId]);
+      }, 500);
+    } catch (error) {
+      console.error("Failed to detect HS code:", error);
+      setDetectionProgress(0);
       setDetectingProductId(null);
-      setProcessedProductIds(prevIds => [...prevIds, productId]);
-    }, 500);
-    
-  } catch (error) {
-    console.error("Failed to detect HS code:", error);
-    setDetectionProgress(0);
-    setDetectingProductId(null);
-  }
-};
-
-
-
-
-// Update handleApprove function to use the correct API path
-const handleApprove = async (productId) => {
-  try {
-    // Get shop credentials
-    const email = localStorage.getItem("user_email");
-    const userType = localStorage.getItem("user_type");
-    
-    let shop, shopify_access_token;
-    if (userType === "sub_user") {
-      const { data: subUser } = await supabase
-        .from("sub_users")
-        .select("owner_id")
-        .eq("email", email)
-        .single();
-      
-      const { data: shopRow } = await supabase
-        .from("shops")
-        .select("shopify_domain, shopify_access_token")
-        .eq("user_id", subUser.owner_id)
-        .single();
-      
-      shop = shopRow.shopify_domain;
-      shopify_access_token = shopRow.shopify_access_token;
-    } else {
-      const { data: user } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email", email)
-        .single();
-      
-      const { data: shopRow } = await supabase
-        .from("shops")
-        .select("shopify_domain, shopify_access_token")
-        .eq("user_id", user.id)
-        .single();
-      
-      shop = shopRow.shopify_domain;
-      shopify_access_token = shopRow.shopify_access_token;
     }
+  };
 
-    const product = pendingProducts.find(p => p.id === productId);
-    
-    // Use the correct API path with /api prefix
-    // await fetch(`${backend}/dutify/hs-code/save`, {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({
-    //     shop,
-    //     accessToken: shopify_access_token,
-    //     productId,
-    //     productName: product.name,
-    //     hsCode: product.suggestedCode,
-    //     confidence: product.confidence,
-    //     status: "approved",
-    //     alternativeCodes: product.alternativeCodes
-    //   }),
-    // });
+  // Update handleApprove function to use the correct API path
+  const handleApprove = async (productId) => {
+    try {
+      // Get shop credentials
+      const email = localStorage.getItem("user_email");
+      const userType = localStorage.getItem("user_type");
 
+      let shop, shopify_access_token;
+      if (userType === "sub_user") {
+        const { data: subUser } = await supabase
+          .from("sub_users")
+          .select("owner_id")
+          .eq("email", email)
+          .single();
 
-    await fetch(`${backend}/dutify/hs-code/save`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        shop,
-        accessToken: shopify_access_token,
-        productId,
-        productName: product.name,
-        hsCode: product.suggestedCode,
-        confidence: product.confidence,
-        status: "approved"
-      }),
-    });
-    
+        const { data: shopRow } = await supabase
+          .from("shops")
+          .select("shopify_domain, shopify_access_token")
+          .eq("user_id", subUser.owner_id)
+          .single();
 
-    setApprovedProductIds(prevIds => [...prevIds, productId]);
-    fetchCounts();
-    
-  } catch (error) {
-    console.error("Failed to approve product:", error);
-  }
-};
+        shop = shopRow.shopify_domain;
+        shopify_access_token = shopRow.shopify_access_token;
+      } else {
+        const { data: user } = await supabase
+          .from("users")
+          .select("id")
+          .eq("email", email)
+          .single();
 
-// Update saveModifiedProduct function to use the correct API path
-const handleModify = (productId) => {
-  const product = pendingProducts.find(p => p.id === productId);
-  setModifyingProduct(product);
-  setModifiedHSCode(product.suggestedCode || "");
-  setModifiedConfidence(product.confidence || "");
-  setShowModifyModal(true);
-};
+        const { data: shopRow } = await supabase
+          .from("shops")
+          .select("shopify_domain, shopify_access_token")
+          .eq("user_id", user.id)
+          .single();
 
-const saveModifiedProduct = async () => {
-  try {
-    setSavingModification(true);
-    
-    // Get shop credentials
-    const email = localStorage.getItem("user_email");
-    const userType = localStorage.getItem("user_type");
-    
-    let shop, shopify_access_token;
-    if (userType === "sub_user") {
-      const { data: subUser } = await supabase
-        .from("sub_users")
-        .select("owner_id")
-        .eq("email", email)
-        .single();
-      
-      const { data: shopRow } = await supabase
-        .from("shops")
-        .select("shopify_domain, shopify_access_token")
-        .eq("user_id", subUser.owner_id)
-        .single();
-      
-      shop = shopRow.shopify_domain;
-      shopify_access_token = shopRow.shopify_access_token;
-    } else {
-      const { data: user } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email", email)
-        .single();
-      
-      const { data: shopRow } = await supabase
-        .from("shops")
-        .select("shopify_domain, shopify_access_token")
-        .eq("user_id", user.id)
-        .single();
-      
-      shop = shopRow.shopify_domain;
-      shopify_access_token = shopRow.shopify_access_token;
+        shop = shopRow.shopify_domain;
+        shopify_access_token = shopRow.shopify_access_token;
+      }
+
+      const product = pendingProducts.find((p) => p.id === productId);
+
+      // Use the correct API path with /api prefix
+      // await fetch(`${backend}/dutify/hs-code/save`, {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify({
+      //     shop,
+      //     accessToken: shopify_access_token,
+      //     productId,
+      //     productName: product.name,
+      //     hsCode: product.suggestedCode,
+      //     confidence: product.confidence,
+      //     status: "approved",
+      //     alternativeCodes: product.alternativeCodes
+      //   }),
+      // });
+
+      await fetch(`${backend}/dutify/hs-code/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shop,
+          accessToken: shopify_access_token,
+          productId,
+          productName: product.name,
+          hsCode: product.suggestedCode,
+          confidence: product.confidence,
+          status: "approved",
+        }),
+      });
+
+      setApprovedProductIds((prevIds) => [...prevIds, productId]);
+      fetchCounts();
+    } catch (error) {
+      console.error("Failed to approve product:", error);
     }
+  };
 
-    // Use the correct API path with /api prefix
-    // await fetch(`${backend}/dutify/hs-code/save`, {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({
-    //     shop,
-    //     accessToken: shopify_access_token,
-    //     productId: modifyingProduct.id,
-    //     productName: modifyingProduct.name,
-    //     hsCode: modifiedHSCode,
-    //     confidence: parseInt(modifiedConfidence),
-    //     status: "modified",
-    //     alternativeCodes: modifyingProduct.alternativeCodes
-    //   }),
-    // });
+  // Update saveModifiedProduct function to use the correct API path
+  const handleModify = (productId) => {
+    const product = pendingProducts.find((p) => p.id === productId);
+    setModifyingProduct(product);
+    setModifiedHSCode(product.suggestedCode || "");
+    setModifiedConfidence(product.confidence || "");
+    setShowModifyModal(true);
+  };
 
-    await fetch(`${backend}/dutify/hs-code/save`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        shop,
-        accessToken: shopify_access_token,
-        productId: modifyingProduct.id,
-        productName: modifyingProduct.name,
-        hsCode: modifiedHSCode,
-        confidence: parseInt(modifiedConfidence),
-        status: "modified"
-      }),
-    });
+  const saveModifiedProduct = async () => {
+    try {
+      setSavingModification(true);
 
-    // Update local state
-    setPendingProducts(prev => 
-      prev.map(p => 
-        p.id === modifyingProduct.id 
-          ? { ...p, suggestedCode: modifiedHSCode, confidence: parseInt(modifiedConfidence) }
-          : p
-      )
-    );
+      // Get shop credentials
+      const email = localStorage.getItem("user_email");
+      const userType = localStorage.getItem("user_type");
 
-    setModifiedProductIds(prevIds => [...prevIds, modifyingProduct.id]);
-    setShowModifyModal(false);
-    setModifyingProduct(null);
-    setSavingModification(false);
-    fetchCounts();
-    
-  } catch (error) {
-    console.error("Failed to modify product:", error);
-    setSavingModification(false);
-  }
-};
+      let shop, shopify_access_token;
+      if (userType === "sub_user") {
+        const { data: subUser } = await supabase
+          .from("sub_users")
+          .select("owner_id")
+          .eq("email", email)
+          .single();
+
+        const { data: shopRow } = await supabase
+          .from("shops")
+          .select("shopify_domain, shopify_access_token")
+          .eq("user_id", subUser.owner_id)
+          .single();
+
+        shop = shopRow.shopify_domain;
+        shopify_access_token = shopRow.shopify_access_token;
+      } else {
+        const { data: user } = await supabase
+          .from("users")
+          .select("id")
+          .eq("email", email)
+          .single();
+
+        const { data: shopRow } = await supabase
+          .from("shops")
+          .select("shopify_domain, shopify_access_token")
+          .eq("user_id", user.id)
+          .single();
+
+        shop = shopRow.shopify_domain;
+        shopify_access_token = shopRow.shopify_access_token;
+      }
+
+      // Use the correct API path with /api prefix
+      // await fetch(`${backend}/dutify/hs-code/save`, {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify({
+      //     shop,
+      //     accessToken: shopify_access_token,
+      //     productId: modifyingProduct.id,
+      //     productName: modifyingProduct.name,
+      //     hsCode: modifiedHSCode,
+      //     confidence: parseInt(modifiedConfidence),
+      //     status: "modified",
+      //     alternativeCodes: modifyingProduct.alternativeCodes
+      //   }),
+      // });
+
+      await fetch(`${backend}/dutify/hs-code/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shop,
+          accessToken: shopify_access_token,
+          productId: modifyingProduct.id,
+          productName: modifyingProduct.name,
+          hsCode: modifiedHSCode,
+          confidence: parseInt(modifiedConfidence),
+          status: "modified",
+        }),
+      });
+
+      // Update local state
+      setPendingProducts((prev) =>
+        prev.map((p) =>
+          p.id === modifyingProduct.id
+            ? {
+                ...p,
+                suggestedCode: modifiedHSCode,
+                confidence: parseInt(modifiedConfidence),
+              }
+            : p
+        )
+      );
+
+      setModifiedProductIds((prevIds) => [...prevIds, modifyingProduct.id]);
+      setShowModifyModal(false);
+      setModifyingProduct(null);
+      setSavingModification(false);
+      fetchCounts();
+    } catch (error) {
+      console.error("Failed to modify product:", error);
+      setSavingModification(false);
+    }
+  };
 
   const getConfidenceColor = (confidence) => {
     if (confidence >= 90) return "text-green-600 bg-green-50";
@@ -613,18 +638,23 @@ const saveModifiedProduct = async () => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "approved": return "bg-green-100 text-green-800 border-green-200";
-      case "modified": return "bg-blue-100 text-blue-800 border-blue-200";
-      case "pending": return "bg-orange-100 text-orange-800 border-orange-200";
-      case "review": return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      default: return "bg-gray-100 text-gray-800 border-gray-200";
+      case "approved":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "modified":
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case "pending":
+        return "bg-orange-100 text-orange-800 border-orange-200";
+      case "review":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50">
       <DashboardNavigation />
-      
+
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -652,7 +682,9 @@ const saveModifiedProduct = async () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-600 mb-1">Classification Accuracy</p>
+                  <p className="text-sm text-slate-600 mb-1">
+                    Classification Accuracy
+                  </p>
                   <p className="text-2xl font-bold text-slate-900">95.2%</p>
                 </div>
                 <BarChart3 className="h-8 w-8 text-green-600" />
@@ -664,7 +696,9 @@ const saveModifiedProduct = async () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-slate-600 mb-1">Pending Review</p>
-                  <p className="text-2xl font-bold text-slate-900">{pendingReviewCount}</p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {pendingReviewCount}
+                  </p>
                 </div>
                 <AlertTriangle className="h-8 w-8 text-yellow-600" />
               </div>
@@ -675,7 +709,9 @@ const saveModifiedProduct = async () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-slate-600 mb-1">Auto-Classified</p>
-                  <p className="text-2xl font-bold text-slate-900">{autoClassifiedCount}</p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {autoClassifiedCount}
+                  </p>
                 </div>
                 <Zap className="h-8 w-8 text-blue-600" />
               </div>
@@ -685,8 +721,12 @@ const saveModifiedProduct = async () => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-600 mb-1">Manual Overrides</p>
-                  <p className="text-2xl font-bold text-slate-900">{manualOverridesCount}</p>
+                  <p className="text-sm text-slate-600 mb-1">
+                    Manual Overrides
+                  </p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {manualOverridesCount}
+                  </p>
                 </div>
                 <Edit className="h-8 w-8 text-purple-600" />
               </div>
@@ -704,12 +744,18 @@ const saveModifiedProduct = async () => {
                       <Brain className="h-6 w-6 text-blue-600" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-blue-900">AI Detection in Progress</h3>
-                      <p className="text-sm text-blue-700">Analyzing product characteristics...</p>
+                      <h3 className="font-semibold text-blue-900">
+                        AI Detection in Progress
+                      </h3>
+                      <p className="text-sm text-blue-700">
+                        Analyzing product characteristics...
+                      </p>
                     </div>
                   </div>
                   <Progress value={detectionProgress} className="h-2" />
-                  <div className="text-sm text-blue-600 mt-2">{detectionProgress}% complete</div>
+                  <div className="text-sm text-blue-600 mt-2">
+                    {detectionProgress}% complete
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -744,21 +790,27 @@ const saveModifiedProduct = async () => {
                       All
                     </Button>
                     <Button
-                      variant={statusFilter === "pending" ? "default" : "outline"}
+                      variant={
+                        statusFilter === "pending" ? "default" : "outline"
+                      }
                       size="sm"
                       onClick={() => setStatusFilter("pending")}
                     >
                       Pending
                     </Button>
                     <Button
-                      variant={statusFilter === "approved" ? "default" : "outline"}
+                      variant={
+                        statusFilter === "approved" ? "default" : "outline"
+                      }
                       size="sm"
                       onClick={() => setStatusFilter("approved")}
                     >
                       Approved
                     </Button>
                     <Button
-                      variant={statusFilter === "modified" ? "default" : "outline"}
+                      variant={
+                        statusFilter === "modified" ? "default" : "outline"
+                      }
                       size="sm"
                       onClick={() => setStatusFilter("modified")}
                     >
@@ -786,35 +838,59 @@ const saveModifiedProduct = async () => {
                               </Badge>
                             </div>
                             <p className="text-sm text-slate-600 mb-2">{product.description}</p>
+                             
+                            {/* Display HS code below description */}
+                            {(approvedProductIds.includes(product.id) || 
+                              modifiedProductIds.includes(product.id) || 
+                              product.hsStatus === 'approved' || 
+                              product.hsStatus === 'modified') && (
+                              <p className="text-sm font-mono text-blue-700 mb-2">
+                                HS Code :  {product.suggestedCode.replace(/^(\d{4})(\d{2})(\d{4})$/, '$1.$2.$3')}
+                              </p>
+                            )}
+                            
                             {processedProductIds.includes(product.id) && (
                               <Badge variant="outline">{product.category}</Badge>
                             )}
                           </div>
-                          <Button 
-                            size="sm" 
-                            onClick={() => handleAIDetection(product.id)}
-                            disabled={detectingProductId === product.id || processedProductIds.includes(product.id)}
-                            className="bg-gradient-to-r from-blue-600 to-purple-600"
-                          >
-                            {detectingProductId === product.id ? (
-                              <>
-                                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                                Detecting...
-                              </>
-                            ) : processedProductIds.includes(product.id) ? (
-                              <>
-                                <CheckCircle className="h-4 w-4 mr-1" />
+                          
+                          {/* Detect button or status */}
+                          {approvedProductIds.includes(product.id) || modifiedProductIds.includes(product.id) || 
+                           product.hsStatus === 'approved' || product.hsStatus === 'modified' ? (
+                            <div className="flex items-center">
+                              <Badge className="bg-green-100 text-green-800 border-green-200 mr-2">
+                                <CheckCircle className="h-3 w-3 mr-1" />
                                 Detected
-                              </>
-                            ) : (
-                              <>
-                                <Zap className="h-4 w-4 mr-1" />
-                                Detect
-                              </>
-                            )}
-                          </Button>
+                              </Badge>
+                             
+                            </div>
+                          ) : (
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleAIDetection(product.id)}
+                              disabled={detectingProductId === product.id || processedProductIds.includes(product.id)}
+                              className="bg-gradient-to-r from-blue-600 to-purple-600"
+                            >
+                              {detectingProductId === product.id ? (
+                                <>
+                                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                                  Detecting...
+                                </>
+                              ) : processedProductIds.includes(product.id) ? (
+                                <>
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  Detected
+                                </>
+                              ) : (
+                                <>
+                                  <Zap className="h-4 w-4 mr-1" />
+                                  Detect
+                                </>
+                              )}
+                            </Button>
+                          )}
                         </div>
-
+                    
                         {processedProductIds.includes(product.id) && (
                           <div className="bg-slate-50 rounded-lg p-3">
                             <div className="flex items-center justify-between mb-2">
@@ -824,8 +900,7 @@ const saveModifiedProduct = async () => {
                               </Badge>
                             </div>
                             <div className="text-lg font-mono text-slate-900 mb-3">{product.suggestedCode}</div>
-
-
+                    
                             <div className="flex space-x-2 mt-3">
                               <Button 
                                 size="sm" 
@@ -854,6 +929,7 @@ const saveModifiedProduct = async () => {
                         )}
                       </div>
                     ))
+                    
                   )}
                 </div>
               </CardContent>
@@ -933,11 +1009,17 @@ const saveModifiedProduct = async () => {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Product</label>
-                <p className="text-sm text-slate-600">{modifyingProduct?.name}</p>
+                <label className="block text-sm font-medium mb-1">
+                  Product
+                </label>
+                <p className="text-sm text-slate-600">
+                  {modifyingProduct?.name}
+                </p>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">HS Code</label>
+                <label className="block text-sm font-medium mb-1">
+                  HS Code
+                </label>
                 <Input
                   value={modifiedHSCode}
                   onChange={(e) => setModifiedHSCode(e.target.value)}
@@ -945,10 +1027,7 @@ const saveModifiedProduct = async () => {
                 />
               </div>
               <div className="flex space-x-2">
-                <Button
-                  onClick={saveModifiedProduct}
-                  className="flex-1"
-                >
+                <Button onClick={saveModifiedProduct} className="flex-1">
                   Save Changes
                 </Button>
                 <Button

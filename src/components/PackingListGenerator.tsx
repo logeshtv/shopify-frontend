@@ -234,12 +234,15 @@ function generatePackingPDF(
   doc.text(`Company: ${shop.name || "Your Store"}`, L + 2, signTop + 20);
   doc.text(`Name of Authorized Signatory: ${shop.contact_name || ""}`, R - 2, signTop + 20, { align: "right" });
 
+  // Save locally for the user
   doc.save(`PackingList_${String(order.order_number || order.id)}.pdf`);
+  
+  // Return buffer and filename for S3 upload
+  const pdfBuffer = doc.output('arraybuffer');
+  const fileName = `PackingList_${String(order.order_number || order.id)}_${Date.now()}.pdf`;
+  
+  return { pdfBuffer, fileName };
 }
-
-
-
-
 
 export const PackingListGenerator: React.FC<PackingListGeneratorProps> = ({
   order,
@@ -259,10 +262,38 @@ export const PackingListGenerator: React.FC<PackingListGeneratorProps> = ({
     }
     try {
       setBusy(true);
-      const { order: fullOrder, shop } = await fetchOrderDetails(order.id);
-      generatePackingPDF(fullOrder, shop, netWeight, grossWeight);
-      onGenerated(order.id);
-      onClose();
+      const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
+      const { shop, token } = await getShopCredentials();
+      const { order: fullOrder, shop: shopData } = await fetchOrderDetails(order.id);
+      
+      // Generate PDF and get buffer
+      const { pdfBuffer, fileName } = generatePackingPDF(fullOrder, shopData, netWeight, grossWeight);
+      
+      // Upload to S3 and save to Supabase
+      const uploadResponse = await fetch(`${backend}/shopify/packing-lists/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shop,
+          accessToken: token,
+          orderId: order.id,
+          orderData: fullOrder,
+          pdfBuffer: Array.from(new Uint8Array(pdfBuffer)),
+          fileName,
+          netWeight,
+          grossWeight
+        }),
+      });
+      
+      if (uploadResponse.ok) {
+        const uploadData = await uploadResponse.json();
+        console.log('Packing list saved:', uploadData.packingListUrl);
+        onGenerated(order.id);
+        onClose();
+      } else {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.error || 'Failed to save packing list');
+      }
     } catch (err: any) {
       console.error(err);
       alert(err.message || "Could not generate packing list.");
@@ -282,17 +313,17 @@ export const PackingListGenerator: React.FC<PackingListGeneratorProps> = ({
         </div>
 
         <div className="space-y-2 mb-4 text-sm">
-          <div>Order #: <span className="font-mono">{order.id}</span></div>
+          <div>Order #: <span className="font-mono">{order.id}</span></div>
           <div>Date: <span className="font-mono">{order.date}</span></div>
         </div>
 
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Net Weight (kg)</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Net Weight (kg)</label>
             <Input type="number" min="0" value={netWeight} onChange={(e) => setNetWeight(e.target.value)} />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Gross Weight (kg)</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Gross Weight (kg)</label>
             <Input type="number" min="0" value={grossWeight} onChange={(e) => setGrossWeight(e.target.value)} />
           </div>
         </div>

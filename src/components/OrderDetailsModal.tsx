@@ -1,32 +1,28 @@
-/* ────────────────────────────────────────────────────────────
- *  OrderDetailsModal.tsx  –  always shows PDFs on scroll
- *  Hard‑coded document URLs:
- *    • /public/Invoice_1003.pdf
- *    • /public/PackingList_1003-6.pdf
- * ────────────────────────────────────────────────────────────*/
-
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import clsx from "clsx";
 
-/* Props */
+/* ────────────────────────────────────────────────────────────
+ *  Types & Supabase
+ * ────────────────────────────────────────────────────────────*/
 interface Props {
   order: { id: number | string } | null;
   onClose: () => void;
 }
 
-/* Supabase client */
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-/* helpers (same as before) */
+/* ────────────────────────────────────────────────────────────
+ *  Helpers
+ * ────────────────────────────────────────────────────────────*/
 async function getShopCredentials() {
   const email = localStorage.getItem("user_email");
-  const type = localStorage.getItem("user_type");
+  const type  = localStorage.getItem("user_type");
   if (!email) throw new Error("Missing user email");
 
   if (type === "sub_user") {
@@ -57,19 +53,21 @@ async function getShopCredentials() {
 }
 
 async function fetchOrderDetails(orderId: number | string) {
-  const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
-  const { shop, token } = await getShopCredentials();
+  const backend        = import.meta.env.VITE_BACKEND_ENDPOINT;
+  const { shop, token} = await getShopCredentials();
 
   const res = await fetch(`${backend}/shopify/orders/details`, {
-    method: "POST",
+    method : "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ shop, accessToken: token, orderId })
+    body   : JSON.stringify({ shop, accessToken: token, orderId })
   });
   if (!res.ok) throw new Error("Order details request failed");
   return res.json(); // { order , shop }
 }
 
-/* UI helpers */
+/* ────────────────────────────────────────────────────────────
+ *  Tiny UI helpers
+ * ────────────────────────────────────────────────────────────*/
 const Section = ({ title, children }: any) => (
   <div className="mb-6">
     <h3 className="text-md font-semibold mb-2">{title}</h3>
@@ -83,36 +81,81 @@ const Row = ({ label, value }: any) => (
   </div>
 );
 
-/* ── Component ───────────────────────────────────────────── */
+/* ────────────────────────────────────────────────────────────
+ *  The Modal
+ * ────────────────────────────────────────────────────────────*/
 const OrderDetailsModal: React.FC<Props> = ({ order, onClose }) => {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
+  const [data, setData]                 = useState<any>(null);
+  const [loading, setLoading]           = useState(false);
+  const [err, setErr]                   = useState("");
+  const [invoiceUrl, setInvoiceUrl]     = useState<string | null>(null);
+  const [packingUrl, setPackingUrl]     = useState<string | null>(null);
 
+  const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
+
+  /* -------- fetch on order change -------- */
   useEffect(() => {
     if (!order) return;
-    (async () => {
+
+    // reset state – fixes “wrong order” PDFs
+    setData(null);
+    setErr("");
+    setInvoiceUrl(null);
+    setPackingUrl(null);
+
+    const fetchData = async () => {
       try {
         setLoading(true);
+
+        /* 1. Shopify order details */
         const { order: full } = await fetchOrderDetails(order.id);
         setData(full);
+
+        /* 2. PDF URLs in Supabase */
+        const [invoiceRes, packingRes] = await Promise.all([
+          supabase
+            .from("order_invoices")
+            .select("invoice_url")
+            .eq("order_id", String(order.id))
+            .maybeSingle(),
+
+          supabase
+            .from("order_packing_lists")
+            .select("packing_list_url")
+            .eq("order_id", String(order.id))
+            .maybeSingle()
+        ]);
+
+        if (invoiceRes.data?.invoice_url) setInvoiceUrl(invoiceRes.data.invoice_url);
+        if (packingRes.data?.packing_list_url) setPackingUrl(packingRes.data.packing_list_url);
       } catch (e: any) {
         setErr(e.message || "Failed to load order");
       } finally {
         setLoading(false);
       }
-    })();
+    };
+
+    fetchData();
   }, [order]);
 
+  /* -------- proxy URLs through the backend document controller -------- */
+  const proxyInvoice = invoiceUrl
+    ? `${backend}/shopify/documents/view?documentUrl=${encodeURIComponent(invoiceUrl)}`
+    : null;
+
+  const proxyPacking = packingUrl
+    ? `${backend}/shopify/documents/view?documentUrl=${encodeURIComponent(packingUrl)}`
+    : null;
+
+  /* -------- render -------- */
   if (!order) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div
-        className={clsx(
-          "bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-lg shadow-lg p-6"
-        )}
-      >
+      <div className={clsx(
+        "bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto",
+        "rounded-lg shadow-lg p-6"
+      )}>
         {/* header */}
         <div className="flex justify-between items-start mb-4">
           <div>
@@ -121,8 +164,7 @@ const OrderDetailsModal: React.FC<Props> = ({ order, onClose }) => {
             </h2>
             {data?.created_at && (
               <p className="text-sm text-gray-500">
-                Placed{" "}
-                {new Date(data.created_at).toLocaleDateString()}
+                Placed {new Date(data.created_at).toLocaleDateString()}
               </p>
             )}
           </div>
@@ -131,50 +173,42 @@ const OrderDetailsModal: React.FC<Props> = ({ order, onClose }) => {
           </Button>
         </div>
 
-        {/* body content */}
+        {/* status */}
         {loading && <p className="text-sm">Loading details…</p>}
-        {err && <p className="text-sm text-red-600">{err}</p>}
+        {err     && <p className="text-sm text-red-600">{err}</p>}
 
+        {/* body */}
         {data && (
           <>
+            {/* ---- Customer ---- */}
             <Section title="Customer">
               <Row
                 label="Name"
-                value={`${data.customer?.first_name || ""} ${
-                  data.customer?.last_name || ""
-                }`.trim()}
+                value={`${data.customer?.first_name || ""} ${data.customer?.last_name || ""}`.trim()}
               />
               <Row label="Email" value={data.email || data.contact_email} />
-              <Row
-                label="Phone"
-                value={data.customer?.phone || data.phone || "—"}
-              />
+              <Row label="Phone" value={data.customer?.phone || data.phone || "—"} />
             </Section>
 
+            {/* ---- Shipping ---- */}
             <Section title="Shipping Address">
               {(Object.values(data.shipping_address || {}) as string[])
                 .filter(Boolean)
                 .slice(0, 5)
-                .map((l, i) => (
-                  <p key={i} className="text-sm">
-                    {l}
-                  </p>
-                ))}
+                .map((l, i) => <p key={i} className="text-sm">{l}</p>)}
             </Section>
 
+            {/* ---- Billing ---- */}
             {data.billing_address && (
               <Section title="Billing Address">
                 {(Object.values(data.billing_address) as string[])
                   .filter(Boolean)
                   .slice(0, 5)
-                  .map((l, i) => (
-                    <p key={i} className="text-sm">
-                      {l}
-                    </p>
-                  ))}
+                  .map((l, i) => <p key={i} className="text-sm">{l}</p>)}
               </Section>
             )}
 
+            {/* ---- Items ---- */}
             <Section title={`Items (${data.line_items.length})`}>
               <table className="w-full text-sm border">
                 <thead className="bg-gray-50">
@@ -188,20 +222,13 @@ const OrderDetailsModal: React.FC<Props> = ({ order, onClose }) => {
                 <tbody>
                   {data.line_items.map((li: any) => (
                     <tr key={li.id}>
-                      <td className="border px-2 py-1">
-                        {li.title || li.name}
-                      </td>
-                      <td className="border px-2 py-1 text-center">
-                        {li.quantity}
-                      </td>
+                      <td className="border px-2 py-1">{li.title || li.name}</td>
+                      <td className="border px-2 py-1 text-center">{li.quantity}</td>
                       <td className="border px-2 py-1 text-center">
                         ${parseFloat(li.price).toFixed(2)}
                       </td>
                       <td className="border px-2 py-1 text-center">
-                        $
-                        {(
-                          parseFloat(li.price) * parseInt(li.quantity)
-                        ).toFixed(2)}
+                        ${(parseFloat(li.price) * parseInt(li.quantity)).toFixed(2)}
                       </td>
                     </tr>
                   ))}
@@ -209,50 +236,44 @@ const OrderDetailsModal: React.FC<Props> = ({ order, onClose }) => {
               </table>
             </Section>
 
+            {/* ---- Totals ---- */}
             <Section title="Totals">
-              <Row
-                label="Subtotal"
-                value={`$${parseFloat(data.subtotal_price).toFixed(2)}`}
-              />
-              <Row
-                label="Tax"
-                value={`$${parseFloat(data.total_tax).toFixed(2)}`}
-              />
-              <Row
-                label="Shipping"
-                value={`$${parseFloat(
-                  data.total_shipping_price_set?.shop_money?.amount || 0
-                ).toFixed(2)}`}
-              />
-              <Row
-                label="Grand Total"
-                value={`$${parseFloat(data.total_price).toFixed(2)}`}
-              />
-              <Row
-                label="Financial Status"
-                value={data.financial_status}
-              />
-              <Row
-                label="Fulfillment Status"
-                value={data.fulfillment_status || "unfulfilled"}
-              />
+              <Row label="Subtotal"           value={`$${parseFloat(data.subtotal_price).toFixed(2)}`} />
+              <Row label="Tax"                value={`$${parseFloat(data.total_tax).toFixed(2)}`} />
+              <Row label="Shipping"           value={`$${parseFloat(data.total_shipping_price_set?.shop_money?.amount || 0).toFixed(2)}`} />
+              <Row label="Grand Total"        value={`$${parseFloat(data.total_price).toFixed(2)}`} />
+              <Row label="Financial Status"   value={data.financial_status} />
+              <Row label="Fulfillment Status" value={data.fulfillment_status || "unfulfilled"} />
             </Section>
 
-            {/* --- embedded PDFs --- */}
+            {/* ---- Invoice PDF ---- */}
             <Section title="Invoice PDF">
-              <iframe
-                src="/Invoice_1003.pdf"
-                title="Invoice PDF"
-                className="w-full h-[500px] border"
-              />
+              {proxyInvoice ? (
+                <iframe
+                  src={proxyInvoice}
+                  title="Invoice PDF"
+                  className="w-full h-[500px] border"
+                />
+              ) : (
+                <div className="p-4 bg-gray-50 border rounded text-center">
+                  <p className="text-gray-600">Invoice has not been generated yet.</p>
+                </div>
+              )}
             </Section>
 
-            <Section title="Packing‑List PDF">
-              <iframe
-                src="/PackingList_1003-6.pdf"
-                title="Packing List PDF"
-                className="w-full h-[500px] border"
-              />
+            {/* ---- Packing‑List PDF ---- */}
+            <Section title="Packing List PDF">
+              {proxyPacking ? (
+                <iframe
+                  src={proxyPacking}
+                  title="Packing List PDF"
+                  className="w-full h-[500px] border"
+                />
+              ) : (
+                <div className="p-4 bg-gray-50 border rounded text-center">
+                  <p className="text-gray-600">Packing list has not been generated yet.</p>
+                </div>
+              )}
             </Section>
           </>
         )}

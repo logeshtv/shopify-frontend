@@ -55,6 +55,11 @@ const Documents = () => {
   const [error, setError] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [generatedCertificates, setGeneratedCertificates] = useState([]);
+  const [existingInvoices, setExistingInvoices] = useState([]);
+  const [generatedInvoices, setGeneratedInvoices] = useState([]);
+  const [selectedPackingOrder, setSelectedPackingOrder] = useState(null);
+  const [generatedPackingLists, setGeneratedPackingLists] = useState([]);
+  const [viewOrder, setViewOrder] = useState(null);
 
   // Fetch certificates from Supabase
   useEffect(() => {
@@ -82,6 +87,72 @@ const Documents = () => {
       }
     };
     fetchCertificates();
+  }, []);
+
+  // Fetch existing invoices
+  useEffect(() => {
+    const fetchExistingInvoices = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("order_invoices")
+          .select("order_id, invoice_url");
+
+        if (error) {
+          console.error("Error fetching invoices:", error);
+          return;
+        }
+
+        if (data) {
+          // Extract order IDs that already have invoices
+          const invoiceOrderIds = data.map((invoice) =>
+            String(invoice.order_id)
+          );
+          setExistingInvoices(invoiceOrderIds);
+          setGeneratedInvoices(invoiceOrderIds);
+        }
+      } catch (error) {
+        console.error("Error in fetchExistingInvoices:", error);
+      }
+    };
+
+    fetchExistingInvoices();
+  }, []);
+
+  useEffect(() => {
+    const fetchExistingPackingLists = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("order_packing_lists")
+          .select("order_id, packing_list_url");
+  
+        if (error) {
+          console.error("Error fetching packing lists:", error);
+          return;
+        }
+  
+        if (data) {
+          // Extract order IDs that already have packing lists
+          const packingListOrderIds = data.map(item => String(item.order_id));
+          setExistingPackingLists(packingListOrderIds);
+          setGeneratedPackingLists(packingListOrderIds);
+          
+          // Update orders with existing packing list status
+          setOrders(prevOrders => 
+            prevOrders.map(order => ({
+              ...order,
+              documents: {
+                ...order.documents,
+                packagingList: packingListOrderIds.includes(String(order.id)) ? "done" : order.documents.packagingList
+              }
+            }))
+          );
+        }
+      } catch (error) {
+        console.error("Error in fetchExistingPackingLists:", error);
+      }
+    };
+    
+    fetchExistingPackingLists();
   }, []);
 
   // Function to save certificate to Supabase
@@ -189,7 +260,35 @@ const Documents = () => {
               packagingList: "pending",
             },
           }));
-          setOrders(mappedOrders);
+
+          // Update orders with existing invoice status
+          const ordersWithInvoiceStatus = mappedOrders.map((order) => ({
+            ...order,
+            documents: {
+              ...order.documents,
+              commercialInvoice: existingInvoices.includes(String(order.id))
+                ? "done"
+                : order.documents.commercialInvoice,
+            },
+          }));
+
+          setOrders(ordersWithInvoiceStatus);
+const ordersWithDocStatus = mappedOrders.map((order) => ({
+  ...order,
+  documents: {
+    ...order.documents,
+    commercialInvoice: existingInvoices.includes(String(order.id))
+      ? "done"
+      : order.documents.commercialInvoice,
+    packagingList: existingPackingLists.includes(String(order.id))
+      ? "done"
+      : order.documents.packagingList
+  },
+}));
+
+setOrders(ordersWithDocStatus);
+
+
         } else if (response.status === 403) {
           console.warn(
             "Orders API permission denied - using empty orders list"
@@ -207,7 +306,7 @@ const Documents = () => {
     };
 
     fetchOrders();
-  }, [backend]);
+  }, [backend, existingInvoices]);
 
   // Fetch products from Shopify
   useEffect(() => {
@@ -302,10 +401,8 @@ const Documents = () => {
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [productStatusFilter, setProductStatusFilter] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [generatedInvoices, setGeneratedInvoices] = useState([]);
-  const [selectedPackingOrder, setSelectedPackingOrder] = useState(null);
-  const [generatedPackingLists, setGeneratedPackingLists] = useState<(string | number)[]>([]);
-  const [viewOrder, setViewOrder] = useState(null);
+  const [existingPackingLists, setExistingPackingLists] = useState([]);
+
 
   // Helper functions
   const isOrderCompleted = (order) =>
@@ -401,12 +498,44 @@ const Documents = () => {
 
   const handleInvoiceGenerated = (orderId) => {
     setGeneratedInvoices((prev) => [...prev, orderId]);
+
+    // Update order status
+    setOrders((prevOrders) =>
+      prevOrders.map((order) =>
+        order.id === orderId
+          ? {
+              ...order,
+              documents: {
+                ...order.documents,
+                commercialInvoice: "done",
+              },
+            }
+          : order
+      )
+    );
   };
 
-  const handlePackingGenerated = (orderId: string | number) => {
+  const handlePackingGenerated = (orderId) => {
     setGeneratedPackingLists((prev) => [...prev, orderId]);
-    // (optional) mark order.documents.packagingList = "done" here if you want
+
+    // Update order status
+    setOrders((prevOrders) =>
+      prevOrders.map((order) =>
+        order.id === orderId
+          ? {
+              ...order,
+              documents: {
+                ...order.documents,
+                packagingList: "done",
+              },
+            }
+          : order
+      )
+    );
   };
+
+
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -651,10 +780,12 @@ const Documents = () => {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  disabled={generatedInvoices.includes(
-                                    order.id
-                                  )}
-                                  onClick={() => setSelectedOrder(order)} // This passes the full order object with correct ID
+                                  disabled={
+                                    order.documents.commercialInvoice ===
+                                      "done" ||
+                                    existingInvoices.includes(String(order.id))
+                                  }
+                                  onClick={() => setSelectedOrder(order)}
                                 >
                                   <FileText className="h-3 w-3" />
                                 </Button>
@@ -662,15 +793,22 @@ const Documents = () => {
                                 <Button
   size="sm"
   variant="outline"
-  disabled={generatedPackingLists.includes(order.id)}
+  disabled={
+    order.documents.packagingList === "done" ||
+    existingPackingLists.includes(String(order.id))
+  }
   onClick={() => setSelectedPackingOrder(order)}
 >
   <Truck className="h-3 w-3 mr-1" />
 </Button>
-<Button size="sm" variant="ghost" onClick={() => setViewOrder(order)}>
-  <Eye className="h-3 w-3" />
-</Button>
 
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setViewOrder(order)}
+                                >
+                                  <Eye className="h-3 w-3" />
+                                </Button>
                               </div>
                             </td>
                           </tr>
@@ -681,7 +819,6 @@ const Documents = () => {
                 )}
               </CardContent>
             </Card>
-
             {/* Products Section */}
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-4">
@@ -944,19 +1081,13 @@ const Documents = () => {
         onGenerated={handleInvoiceGenerated}
       />
 
-<PackingListGenerator
-  order={selectedPackingOrder}
-  onClose={() => setSelectedPackingOrder(null)}
-  onGenerated={handlePackingGenerated}
-/>
+      <PackingListGenerator
+        order={selectedPackingOrder}
+        onClose={() => setSelectedPackingOrder(null)}
+        onGenerated={handlePackingGenerated}
+      />
 
-<OrderDetailsModal
-  order={viewOrder}
-  onClose={() => setViewOrder(null)}
-/>
-
-
-
+      <OrderDetailsModal order={viewOrder} onClose={() => setViewOrder(null)} />
     </div>
   );
 };

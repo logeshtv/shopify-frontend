@@ -81,98 +81,128 @@ function generatePackingPDF(
   grossWeightKg: string
 ) {
   const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
+
   const L = 10, R = 200, pageW = 210, usableW = R - L;
 
-  doc.setFontSize(14).setFont(undefined, "bold");
+  const writeCellCentered = (
+    txt: string,
+    xLeft: number,
+    colW: number,
+    yTop: number,
+    rowH: number
+  ) => {
+    const xCenter = xLeft + colW / 2;
+    const yCenter = yTop + rowH / 2;
+    doc.text(txt, xCenter, yCenter, {
+      align: "center",
+      baseline: "middle"
+    });
+  };
+
+  // Title
+  doc.setFontSize(16).setFont(undefined, "bold");
   doc.text("PACKING LIST", pageW / 2, 15, { align: "center" });
 
+  // Header
   const headerTop = 20, headerHeight = 40, colW = usableW / 3;
+  doc.setFontSize(9).setFont(undefined, "normal");
   doc.rect(L, headerTop, usableW, headerHeight);
-  doc.line(L + colW, headerTop, L + colW, headerTop + headerHeight);
   doc.line(L + colW * 2, headerTop, L + colW * 2, headerTop + headerHeight);
   doc.line(L + colW * 2, headerTop + headerHeight / 2, R, headerTop + headerHeight / 2);
 
-  doc.setFontSize(8).setFont(undefined, "normal");
-  let y = headerTop + 4;
-  const addLine = (txt: string) => { doc.text(txt, L + 2, y); y += 4; };
-  addLine("Exporter");
-  addLine(shop.name || "Your Store");
-  if (shop.address1) addLine(shop.address1);
-  if (shop.city) addLine(`${shop.city}${shop.province ? ", " + shop.province : ""} ${shop.zip || ""}`);
-  if (shop.phone) addLine(shop.phone);
-  if (shop.email) addLine(shop.email);
+  let y = headerTop + 5;
+  doc.setFont(undefined, "bold").text("EXPORTER", L + 2, y);
+  doc.setFont(undefined, "normal");
+  y += 4;
+
+  const exporterLines = [
+    shop.name || "Your Store",
+    shop.address1 || "",
+    `${shop.city || ""}${shop.province ? ", " + shop.province : ""} ${shop.zip || ""}`,
+    shop.country || "",
+    shop.phone || "",
+    shop.email || "",
+  ];
+
+  exporterLines.forEach((line) => {
+    if (line && line.trim().toUpperCase() !== "IN") {
+      doc.text(line, L + 2, y);
+      y += 4;
+    }
+  });
 
   if (shop.logo) {
     try {
       doc.addImage(shop.logo, "PNG", L + colW + colW / 2 - 15, headerTop + 10, 30, 15);
-    } catch { }
+    } catch {}
   }
 
+  let ry = headerTop + 5;
   const rightX = L + colW * 2 + 2;
-  let ry = headerTop + 4;
   const addRight = (label: string, val: string) => {
-    doc.text(`${label}:`, rightX, ry);
-    doc.text(String(val), rightX + 40, ry);
-    ry += 4;
+    doc.setFont(undefined, "bold").text(`${label}:`, rightX, ry);
+    doc.setFont(undefined, "normal").text(String(val), rightX + 30, ry);
+    ry += 5;
   };
+
   addRight("Invoice #", String(order.order_number ?? order.id));
   addRight("Date", new Date(order.created_at || Date.now()).toLocaleDateString());
   addRight("Page", "1 of 1");
 
-  ry = headerTop + headerHeight / 2 + 4;
-  addRight("B/L #", "");
-  addRight("Buyer Ref", "");
-
-  const consigTop = headerTop + headerHeight + 2, consigHeight = 30;
+  // Consignee
+  const consigTop = headerTop + headerHeight + 4;
+  const consigHeight = 30;
   doc.rect(L, consigTop, usableW, consigHeight);
-  doc.line(L, consigTop + consigHeight / 2, R, consigTop + consigHeight / 2);
 
-  doc.setFontSize(8).setFont(undefined, "bold");
-  doc.text("Consignee:", L + 2, consigTop + 4);
-  doc.setFont(undefined, "normal");
   const ship = order.shipping_address || {};
   const consigLines = [
-    `${ship.first_name || ""} ${ship.last_name || ""}`.trim() || " ",
-    ship.address1 || " ",
-    `${ship.city || ""}${ship.province ? ", " + ship.province : ""} ${ship.zip || ""}`.trim() || " ",
-    ship.country || " ",
+    `Name: ${ship.first_name || ""} ${ship.last_name || ""}`.trim(),
+    `Address: ${ship.address1 || ""}`,
+    `City: ${ship.city || ""}, ${ship.province || ""} ${ship.zip || ""}`,
+    `Country: ${ship.country || ""}`,
   ];
-  consigLines.forEach((l, i) => doc.text(l, L + 2, consigTop + 8 + i * 4));
 
-  doc.setFont(undefined, "bold").text("Dispatch Info:", L + usableW / 2 + 2, consigTop + 4);
-  doc.setFont(undefined, "normal").text("Mode: Sea", L + usableW / 2 + 2, consigTop + 8);
+  doc.setFont(undefined, "bold").text("CONSIGNEE", L + 2, consigTop + 5);
+  doc.setFont(undefined, "normal");
+  consigLines.forEach((line, i) => {
+    doc.text(line, L + 2, consigTop + 10 + i * 4);
+  });
 
-  const tableTop = consigTop + consigHeight + 4;
-  doc.setFontSize(8);
-  doc.rect(L, tableTop, usableW, 8);
-
+  // Table Header
+  const tableTop = consigTop + consigHeight + 6;
   const colDesc = 70, colPid = 30, colQty = 25, colNet = 30, colGross = 30;
   const colBreaks = [colDesc, colDesc + colPid, colDesc + colPid + colQty, colDesc + colPid + colQty + colNet];
+
+  doc.rect(L, tableTop, usableW, 8);
   colBreaks.forEach((x) => doc.line(L + x, tableTop, L + x, tableTop + 8));
 
   doc.setFont(undefined, "bold");
   doc.text("Description of Goods", L + 2, tableTop + 5);
-  doc.text("Product ID", L + colDesc + 2, tableTop + 5);
-  doc.text("Qty / Unit", L + colDesc + colPid + 2, tableTop + 5);
-  doc.text("Net Wt (kg)", L + colDesc + colPid + colQty + 2, tableTop + 5);
-  doc.text("Gross Wt (kg)", R - 2, tableTop + 5, { align: "right" });
+  doc.text("Product ID", L + colDesc + colPid / 2, tableTop + 5, { align: "center" });
+  doc.text("Qty / Unit", L + colDesc + colPid + colQty / 2, tableTop + 5, { align: "center" });
+  doc.text("Net Wt (kg)", L + colDesc + colPid + colQty + colNet / 2, tableTop + 5, { align: "center" });
+  doc.text("Gross Wt (kg)", R - colGross / 2, tableTop + 5, { align: "center" });
 
+  // Table Rows
   let curY = tableTop + 8;
   doc.setFont(undefined, "normal");
   const qtyTotal = (order.line_items || []).reduce((t: number, li: any) => t + (li.quantity || 0), 0);
 
   (order.line_items || []).forEach((li: any) => {
     const descLines = doc.splitTextToSize(String(li.title || "Item"), colDesc - 2);
-    const rowH = descLines.length * 4;
+    const rowH = descLines.length * 8;
 
     doc.rect(L, curY, usableW, rowH);
     colBreaks.forEach((x) => doc.line(L + x, curY, L + x, curY + rowH));
-    descLines.forEach((l: string, idx: number) => doc.text(l, L + 2, curY + 4 * (idx + 1) - 1));
 
-    doc.text(String(li.product_id ?? li.sku ?? "—"), L + colDesc + 2, curY + 4);
-    doc.text(`${li.quantity || 1} ${li.unit_of_measurement || ""}`.trim(), L + colDesc + colPid + 2, curY + 4);
-    doc.text(netWeightKg, L + colDesc + colPid + colQty + 2, curY + 4);
-    doc.text(grossWeightKg, R - 2, curY + 4, { align: "right" });
+    descLines.forEach((l: string, idx: number) => {
+      doc.text(l, L + 2, curY + 8 * (idx + 1) - 3);
+    });
+
+    writeCellCentered(String(li.product_id ?? li.sku ?? "—"), L + colDesc, colPid, curY, rowH);
+    writeCellCentered(`${li.quantity || 1} ${li.unit_of_measurement || ""}`.trim(), L + colDesc + colPid, colQty, curY, rowH);
+    writeCellCentered(netWeightKg, L + colDesc + colPid + colQty, colNet, curY, rowH);
+    writeCellCentered(grossWeightKg, R - colGross, colGross, curY, rowH);
 
     curY += rowH;
     if (curY + 50 > 280) {
@@ -181,34 +211,35 @@ function generatePackingPDF(
     }
   });
 
+  // Footer Totals
   const footerTop = 240;
-  doc.rect(L, footerTop, usableW, 12);
-  doc.line(L + colDesc + colPid, footerTop, L + colDesc + colPid, footerTop + 12);
-  doc.line(L + colDesc + colPid + colQty, footerTop, L + colDesc + colPid + colQty, footerTop + 12);
+  const drawFooterRow = (label: string, y: number) => {
+    doc.rect(L, y, usableW, 12);
+    doc.line(L + colDesc + colPid, y, L + colDesc + colPid, y + 12);
+    doc.line(L + colDesc + colPid + colQty, y, L + colDesc + colPid + colQty, y + 12);
+    doc.setFont(undefined, "bold").text(label, L + 2, y + 8);
+    writeCellCentered(String(qtyTotal), L + colDesc + colPid, colQty, y, 12);
+    writeCellCentered(netWeightKg, L + colDesc + colPid + colQty, colNet, y, 12);
+    writeCellCentered(grossWeightKg, R - colGross, colGross, y, 12);
+  };
 
-  doc.setFont(undefined, "bold").text("Total This Page", L + 2, footerTop + 8);
-  doc.text(String(qtyTotal), L + colDesc + colPid + 2, footerTop + 8);
-  doc.text(netWeightKg, L + colDesc + colPid + colQty + 2, footerTop + 8);
-  doc.text(grossWeightKg, R - 2, footerTop + 8, { align: "right" });
+  drawFooterRow("Total This Page", footerTop);
+  drawFooterRow("Consignment Total", footerTop + 12);
 
-  const foot2Top = footerTop + 12;
-  doc.rect(L, foot2Top, usableW, 12);
-  doc.line(L + colDesc + colPid, foot2Top, L + colDesc + colPid, foot2Top + 12);
-  doc.line(L + colDesc + colPid + colQty, foot2Top, L + colDesc + colPid + colQty, foot2Top + 12);
-  doc.text("Consignment Total", L + 2, foot2Top + 8);
-  doc.text(String(qtyTotal), L + colDesc + colPid + 2, foot2Top + 8);
-  doc.text(netWeightKg, L + colDesc + colPid + colQty + 2, foot2Top + 8);
-  doc.text(grossWeightKg, R - 2, foot2Top + 8, { align: "right" });
-
-  const signTop = foot2Top + 15;
-  doc.rect(L + usableW / 2, signTop, usableW / 2, 25);
-  doc.setFont(undefined, "normal").text("Signatory Company", L + usableW / 2 + 2, signTop + 5);
-  doc.text(shop.name || "Your Store", L + usableW / 2 + 2, signTop + 10);
-  doc.text("Name of Authorized Signatory:", L + usableW / 2 + 2, signTop + 18);
-  doc.setFont(undefined, "bold").text(String(shop.contact_name || ""), R - 2, signTop + 18, { align: "right" });
+  // Signature
+  const signTop = footerTop + 27;
+  doc.rect(L, signTop, usableW, 25);
+  doc.setFont(undefined, "normal").text("Authorized Signature:", L + 2, signTop + 8);
+  doc.text("__________________________", L + 2, signTop + 14);
+  doc.text(`Company: ${shop.name || "Your Store"}`, L + 2, signTop + 20);
+  doc.text(`Name of Authorized Signatory: ${shop.contact_name || ""}`, R - 2, signTop + 20, { align: "right" });
 
   doc.save(`PackingList_${String(order.order_number || order.id)}.pdf`);
 }
+
+
+
+
 
 export const PackingListGenerator: React.FC<PackingListGeneratorProps> = ({
   order,

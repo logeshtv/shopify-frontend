@@ -20,123 +20,127 @@ interface InvoiceGeneratorProps {
   onClose: () => void;
   onGenerated: (orderId: string) => void;
 }
-
 const generateInvoicePDF = async (orderData: any, shopData: any) => {
   const doc = new jsPDF();
-  
-  // Header with logo (if available)
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  // Base font style
+  doc.setFontSize(9);
+  doc.setTextColor(30);
+
+  // Optional logo
   if (shopData.logo) {
     try {
-      doc.addImage(shopData.logo, 'PNG', 20, 20, 40, 20);
-    } catch (e) {
-      console.log('Could not add logo');
-    }
+      doc.addImage(shopData.logo, 'PNG', 20, 15, 30, 15);
+    } catch {}
   }
-  
-  // Company info
-  doc.setFontSize(16);
+
+  // Title: INVOICE
+  doc.setFontSize(14);
   doc.setFont(undefined, 'bold');
-  doc.text(shopData.name || 'Your Store', 20, 50);
-  doc.setFontSize(10);
+  doc.text('INVOICE', pageWidth - 20, 28, { align: 'right' });
+
+  // Divider
+  doc.setDrawColor(150);
+  doc.line(20, 32, pageWidth - 20, 32);
+
+  // ISSUED TO section
+  const shipping = orderData.shipping_address || {};
+  const customer = orderData.customer || {};
+  let yLeft = 45;
+
+  doc.setFontSize(9);
+  doc.setFont(undefined, 'bold').text('ISSUED TO:', 20, yLeft);
+  yLeft += 5;
   doc.setFont(undefined, 'normal');
-  if (shopData.address1) {
-    doc.text(`${shopData.address1}`, 20, 60);
-    if (shopData.city && shopData.province) {
-      doc.text(`${shopData.city}, ${shopData.province} ${shopData.zip || ''}`, 20, 70);
-    }
+  if (customer.first_name || customer.last_name) {
+    doc.text(`${customer.first_name || ''} ${customer.last_name || ''}`.trim(), 20, yLeft);
+    yLeft += 5;
   }
-  
-  // Invoice title
-  doc.setFontSize(20);
-  doc.setFont(undefined, 'bold');
-  doc.text('INVOICE', 150, 30);
-  
-  // Invoice details
-  doc.setFontSize(10);
-  doc.setFont(undefined, 'normal');
-  doc.text(`Invoice #: ${orderData.order_number || orderData.id}`, 150, 45);
-  doc.text(`Date: ${new Date(orderData.created_at).toLocaleDateString()}`, 150, 55);
-  
-// Bill to
-doc.setFont(undefined, 'bold');
-doc.text('SHIP TO:', 20, 90);
-doc.setFont(undefined, 'normal');
-
-const customer = orderData.customer;
-const shipping = orderData.shipping_address;
-
-if (customer) {
-  doc.text(`${customer.first_name || ''} ${customer.last_name || ''}`.trim(), 20, 100);
-}
-if (shipping) {
-  let yPos = 110;
   if (shipping.address1) {
-    doc.text(shipping.address1, 20, yPos);
-    yPos += 10;
+    doc.text(shipping.address1, 20, yLeft);
+    yLeft += 5;
   }
-  if (shipping.city && shipping.province) {
-    doc.text(`${shipping.city}, ${shipping.province} ${shipping.zip || ''}`, 20, yPos);
-    yPos += 10;
+  if (shipping.city || shipping.zip) {
+    doc.text(`${shipping.city || ''}, ${shipping.province || ''} ${shipping.zip || ''}`, 20, yLeft);
   }
-  if (shipping.country) {
-    doc.text(shipping.country, 20, yPos);
-  }
-}
 
-  
-  // Table header
-  const startY = 140;
+  // INVOICE DETAILS
+  let yRight = 45;
+  const rightX = pageWidth - 20;
+  doc.setFont(undefined, 'bold').text('INVOICE NO:', rightX - 50, yRight);
+  doc.setFont(undefined, 'normal').text(`${orderData.order_number || orderData.id}`, rightX, yRight, { align: 'right' });
+
+  yRight += 5;
+  doc.setFont(undefined, 'bold').text('DATE:', rightX - 50, yRight);
+  doc.setFont(undefined, 'normal').text(new Date(orderData.created_at).toLocaleDateString(), rightX, yRight, { align: 'right' });
+
+  // TABLE HEADERS
+  const tableStartY = 90;
+  doc.setDrawColor(0);
+  doc.line(20, tableStartY - 4, pageWidth - 20, tableStartY - 4);
+
   doc.setFont(undefined, 'bold');
-  doc.text('Item', 20, startY);
-  doc.text('Qty', 100, startY);
-  doc.text('Price', 130, startY);
-  doc.text('Total', 160, startY);
-  
-  // Table line
-  doc.line(20, startY + 5, 190, startY + 5);
-  
-  // Table content
-  let currentY = startY + 15;
+  doc.text('DESCRIPTION', 20, tableStartY);
+  doc.text('UNIT PRICE', 105, tableStartY, { align: 'right' });
+  doc.text('QTY', 130, tableStartY, { align: 'right' });
+  doc.text('TOTAL', 180, tableStartY, { align: 'right' });
+
+  doc.line(20, tableStartY + 2, pageWidth - 20, tableStartY + 2);
+
+  // TABLE CONTENT
+  let curY = tableStartY + 8;
   doc.setFont(undefined, 'normal');
-  
-  if (orderData.line_items && orderData.line_items.length > 0) {
-    orderData.line_items.forEach((item: any) => {
-      const itemName = item.title || item.name || 'Product';
-      const quantity = parseInt(item.quantity || '1');
-      const price = parseFloat(item.price || '0');
-      const total = (price * quantity).toFixed(2);
-      
-      doc.text(itemName.length > 25 ? itemName.substring(0, 25) + '...' : itemName, 20, currentY);
-      doc.text(quantity.toString(), 100, currentY);
-      doc.text(`$${price.toFixed(2)}`, 130, currentY);
-      doc.text(`$${total}`, 160, currentY);
-      currentY += 10;
-    });
-  } else {
-    doc.text('No items found', 20, currentY);
-    currentY += 10;
-  }
-  
-  // Totals
-  currentY += 10;
-  doc.line(130, currentY, 190, currentY);
-  currentY += 10;
-  
-  doc.text('Subtotal:', 130, currentY);
-  doc.text(`$${parseFloat(orderData.subtotal_price || '0').toFixed(2)}`, 160, currentY);
-  currentY += 10;
-  
-  doc.text('Tax:', 130, currentY);
-  doc.text(`$${parseFloat(orderData.total_tax || '0').toFixed(2)}`, 160, currentY);
-  currentY += 10;
-  
+  let subtotal = 0;
+
+  (orderData.line_items || []).forEach((item: any) => {
+    const desc = item.title || 'Product';
+    const qty = parseFloat(item.quantity || '1');
+    const price = parseFloat(item.price || '0');
+    const total = qty * price;
+    subtotal += total;
+
+    doc.text(desc, 20, curY);
+    doc.text(`$${price.toFixed(2)}`, 105, curY, { align: 'right' });
+    doc.text(`${qty}`, 130, curY, { align: 'right' });
+    doc.text(`$${total.toFixed(2)}`, 180, curY, { align: 'right' });
+
+    curY += 8;
+  });
+
+  // TOTALS SECTION
+  curY += 10;
+  doc.setDrawColor(150);
+  doc.line(130, curY - 4, pageWidth - 20, curY - 4);
+
+  const tax = parseFloat(orderData.total_tax || '0');
+  const total = parseFloat(orderData.total_price || subtotal + tax);
+
   doc.setFont(undefined, 'bold');
-  doc.text('Total:', 130, currentY);
-  doc.text(`$${parseFloat(orderData.total_price || '0').toFixed(2)}`, 160, currentY);
-  
-  // Download
+  doc.text('SUBTOTAL', 130, curY);
+  doc.text(`$${subtotal.toFixed(2)}`, 180, curY, { align: 'right' });
+
+  curY += 6;
+  doc.setFont(undefined, 'normal');
+  doc.text('Tax (10%)', 130, curY);
+  doc.text(`$${tax.toFixed(2)}`, 180, curY, { align: 'right' });
+
+  curY += 6;
+  doc.setFont(undefined, 'bold');
+  doc.text('TOTAL', 130, curY);
+  doc.text(`$${total.toFixed(2)}`, 180, curY, { align: 'right' });
+
+  // Signature / Shop name
+  curY += 25;
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'italic');
+  doc.text(shopData.name || 'Your Store', pageWidth - 20, curY, { align: 'right' });
+
+  // Save PDF
   doc.save(`Invoice_${orderData.order_number || orderData.id}.pdf`);
 };
+
+
 
 const InvoiceGenerator: React.FC<InvoiceGeneratorProps> = ({ order, onClose, onGenerated }) => {
   if (!order) return null;

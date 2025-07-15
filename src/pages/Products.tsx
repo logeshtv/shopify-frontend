@@ -119,8 +119,10 @@ const Products = () => {
   }, [products, searchTerm]);
 
   const total = products.length;
-  const hsCoded = products.filter((p) => p?.hs_code).length;
-  const needReview = total - hsCoded;
+  const approved = products.filter(p => p.complianceStatus === "approved").length;
+  const modified = products.filter(p => p.complianceStatus === "modified").length;
+  const pending = products.filter(p => p.complianceStatus === "pending").length;
+
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -133,9 +135,9 @@ const Products = () => {
         />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-          <StatsCard title="Total Products" value={total} icon={Package} />
-          <StatsCard title="HS Coded" value={hsCoded} icon={CheckCircle} />
-          <StatsCard title="Need Review" value={needReview} icon={AlertTriangle} />
+        <StatsCard title="Total Products" value={total} icon={Package} />
+          <StatsCard title="HS Coded" value={approved + modified} icon={CheckCircle} />
+          <StatsCard title="Need Review" value={pending} icon={AlertTriangle} />
           <StatsCard title="High ESG Risk" value={0} icon={AlertTriangle} />
         </div>
 
@@ -258,11 +260,24 @@ const StatsCard = ({ title, value, icon: Icon }) => (
   </Card>
 );
 
+
 const ProductRow = ({ product, onView, onEdit, onDelete }) => {
   const status = product.complianceStatus || "pending";
   const sku = product.variants?.[0]?.sku ?? "—";
   const price = product.variants?.[0]?.price ? `$${product.variants[0].price}` : "—";
   const category = product.product_type || "—";
+
+  // Function to determine badge color based on status
+  const getStatusBadgeClass = (status) => {
+    switch (status) {
+      case "approved":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "modified":
+        return "bg-blue-600 text-white border-blue-700";
+      default: // pending or any other status
+        return "bg-orange-100 text-orange-800 border-orange-200";
+    }
+  };
 
   return (
     <div className="flex items-center space-x-2 sm:space-x-4 p-3 sm:p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
@@ -277,13 +292,7 @@ const ProductRow = ({ product, onView, onEdit, onDelete }) => {
       <div className="flex-1 min-w-0">
         <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 mb-1">
           <h3 className="font-medium text-slate-900 truncate text-sm sm:text-base">{product.title}</h3>
-          <Badge className={`text-xs w-fit ${
-            status === "compliant"
-              ? "bg-green-100 text-green-800 border-green-200"
-              : status === "review"
-              ? "bg-yellow-100 text-yellow-800 border-yellow-200"
-              : "bg-orange-100 text-orange-800 border-orange-200"
-          }`}>
+          <Badge className={`text-xs w-fit ${getStatusBadgeClass(status)}`}>
             {status}
           </Badge>
         </div>
@@ -313,6 +322,7 @@ const ProductRow = ({ product, onView, onEdit, onDelete }) => {
     </div>
   );
 };
+
 
 const ProductViewModal = ({ productId, onClose }) => {
   const [product, setProduct] = useState<any>(null);

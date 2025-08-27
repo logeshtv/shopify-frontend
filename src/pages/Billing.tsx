@@ -52,38 +52,32 @@ const Billing = () => {
   const handleCheckout = async (priceId: string, planId: string) => {
     setLoadingPlan(planId);
     try {
-      const email = localStorage.getItem("user_email");
-      if (!email) {
-        alert("User not logged in. Please log in to continue.");
-        setLoadingPlan("");
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('Please log in to continue.');
         return;
       }
-
-      const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
-
-      const response = await fetch(`${backend}/stripe/checkout`, {
-        method: "POST",
+  
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_ENDPOINT}/stripe/checkout`, {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ priceId, email }),
+        body: JSON.stringify({ priceId }),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to create checkout session.");
-      }
-
+  
+      if (!response.ok) throw new Error('Checkout failed');
+  
       const { url } = await response.json();
-      if (url) {
-        window.location.href = url;
-      }
+      if (url) window.location.href = url;
     } catch (error) {
-      console.error("Checkout error:", error);
-      alert("An error occurred during checkout. Please try again.");
+      alert('Checkout failed. Please try again.');
     } finally {
-      setLoadingPlan("");
+      setLoadingPlan('');
     }
   };
+  
 
   const plans = [
     {

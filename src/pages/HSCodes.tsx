@@ -39,6 +39,7 @@ const HSCodes = () => {
   const [error, setError] = useState("");
   const [processedProductIds, setProcessedProductIds] = useState([]);
   const [approvedProductIds, setApprovedProductIds] = useState([]);
+  const [approvingProductId, setApprovingProductId] = useState(null);
   const [modifiedProductIds, setModifiedProductIds] = useState([]);
   const [pendingReviewCount, setPendingReviewCount] = useState(0);
   const [autoClassifiedCount, setAutoClassifiedCount] = useState(0);
@@ -115,8 +116,9 @@ const HSCodes = () => {
 
   const fetchCounts = async () => {
     try {
-      const email = localStorage.getItem("user_email");
-      const userType = localStorage.getItem("user_type");
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const email = user.email;
+      const userType = user.type;
 
       let shop, shopify_access_token;
       if (userType === "sub_user") {
@@ -191,8 +193,10 @@ const HSCodes = () => {
       setLoading(true);
       setError("");
       try {
-        const email = localStorage.getItem("user_email");
-        const userType = localStorage.getItem("user_type");
+        const user = JSON.parse(localStorage.getItem("user") || "{}");
+        const email = user.email;
+        const userType = user.type;
+
         if (!email) {
           setError("User not logged in");
           setLoading(false);
@@ -330,8 +334,6 @@ const HSCodes = () => {
     fetchCounts();
   }, [statusFilter]);
 
-  // Update handleAIDetection function to use the correct API path
-  // Update handleAIDetection function to use the correct API request format
   const handleAIDetection = async (productId) => {
     try {
       setDetectingProductId(productId);
@@ -348,9 +350,10 @@ const HSCodes = () => {
         });
       }, 100);
 
-      // Get shop credentials
-      const email = localStorage.getItem("user_email");
-      const userType = localStorage.getItem("user_type");
+      // Get shop credentials using JWT tokens
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const email = user.email;
+      const userType = user.type;
 
       let shop, shopify_access_token;
       if (userType === "sub_user") {
@@ -406,21 +409,6 @@ const HSCodes = () => {
         throw new Error(data.error || "Detection failed");
       }
 
-      // Update product in state
-      // setPendingProducts(prev =>
-      //   prev.map(p =>
-      //     p.id === productId
-      //       ? {
-      //           ...p,
-      //           suggestedCode: data.suggestedCode,
-      //           confidence: data.confidence,
-      //           alternativeCodes: data.alternativeCodes || [],
-      //           hsStatus: 'pending'
-      //         }
-      //       : p
-      //   )
-      // );
-
       setPendingProducts((prev) =>
         prev.map((p) =>
           p.id === productId
@@ -447,12 +435,14 @@ const HSCodes = () => {
     }
   };
 
-  // Update handleApprove function to use the correct API path
   const handleApprove = async (productId) => {
     try {
-      // Get shop credentials
-      const email = localStorage.getItem("user_email");
-      const userType = localStorage.getItem("user_type");
+      setApprovingProductId(productId);
+
+      // Get shop credentials using JWT tokens
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const email = user.email;
+      const userType = user.type;
 
       let shop, shopify_access_token;
       if (userType === "sub_user") {
@@ -471,7 +461,7 @@ const HSCodes = () => {
         shop = shopRow.shopify_domain;
         shopify_access_token = shopRow.shopify_access_token;
       } else {
-        const { data: user } = await supabase
+        const { data: userData } = await supabase
           .from("users")
           .select("id")
           .eq("email", email)
@@ -480,7 +470,7 @@ const HSCodes = () => {
         const { data: shopRow } = await supabase
           .from("shops")
           .select("shopify_domain, shopify_access_token")
-          .eq("user_id", user.id)
+          .eq("user_id", userData.id)
           .single();
 
         shop = shopRow.shopify_domain;
@@ -488,22 +478,6 @@ const HSCodes = () => {
       }
 
       const product = pendingProducts.find((p) => p.id === productId);
-
-      // Use the correct API path with /api prefix
-      // await fetch(`${backend}/dutify/hs-code/save`, {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({
-      //     shop,
-      //     accessToken: shopify_access_token,
-      //     productId,
-      //     productName: product.name,
-      //     hsCode: product.suggestedCode,
-      //     confidence: product.confidence,
-      //     status: "approved",
-      //     alternativeCodes: product.alternativeCodes
-      //   }),
-      // });
 
       await fetch(`${backend}/dutify/hs-code/save`, {
         method: "POST",
@@ -523,9 +497,10 @@ const HSCodes = () => {
       fetchCounts();
     } catch (error) {
       console.error("Failed to approve product:", error);
+    } finally {
+      setApprovingProductId(null);
     }
   };
-
   // Update saveModifiedProduct function to use the correct API path
   const handleModify = (productId) => {
     const product = pendingProducts.find((p) => p.id === productId);
@@ -538,11 +513,12 @@ const HSCodes = () => {
   const saveModifiedProduct = async () => {
     try {
       setSavingModification(true);
-
-      // Get shop credentials
-      const email = localStorage.getItem("user_email");
-      const userType = localStorage.getItem("user_type");
-
+  
+      // Get shop credentials using JWT tokens
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const email = user.email;
+      const userType = user.type;
+  
       let shop, shopify_access_token;
       if (userType === "sub_user") {
         const { data: subUser } = await supabase
@@ -550,48 +526,32 @@ const HSCodes = () => {
           .select("owner_id")
           .eq("email", email)
           .single();
-
+  
         const { data: shopRow } = await supabase
           .from("shops")
           .select("shopify_domain, shopify_access_token")
           .eq("user_id", subUser.owner_id)
           .single();
-
+  
         shop = shopRow.shopify_domain;
         shopify_access_token = shopRow.shopify_access_token;
       } else {
-        const { data: user } = await supabase
+        const { data: userData } = await supabase
           .from("users")
           .select("id")
           .eq("email", email)
           .single();
-
+  
         const { data: shopRow } = await supabase
           .from("shops")
           .select("shopify_domain, shopify_access_token")
-          .eq("user_id", user.id)
+          .eq("user_id", userData.id)
           .single();
-
+  
         shop = shopRow.shopify_domain;
         shopify_access_token = shopRow.shopify_access_token;
       }
-
-      // Use the correct API path with /api prefix
-      // await fetch(`${backend}/dutify/hs-code/save`, {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({
-      //     shop,
-      //     accessToken: shopify_access_token,
-      //     productId: modifyingProduct.id,
-      //     productName: modifyingProduct.name,
-      //     hsCode: modifiedHSCode,
-      //     confidence: parseInt(modifiedConfidence),
-      //     status: "modified",
-      //     alternativeCodes: modifyingProduct.alternativeCodes
-      //   }),
-      // });
-
+  
       await fetch(`${backend}/dutify/hs-code/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -605,7 +565,7 @@ const HSCodes = () => {
           status: "modified",
         }),
       });
-
+  
       // Update local state
       setPendingProducts((prev) =>
         prev.map((p) =>
@@ -618,7 +578,7 @@ const HSCodes = () => {
             : p
         )
       );
-
+  
       setModifiedProductIds((prevIds) => [...prevIds, modifyingProduct.id]);
       setShowModifyModal(false);
       setModifyingProduct(null);
@@ -629,6 +589,7 @@ const HSCodes = () => {
       setSavingModification(false);
     }
   };
+  
 
   const getConfidenceColor = (confidence) => {
     if (confidence >= 90) return "text-green-600 bg-green-50";
@@ -828,47 +789,66 @@ const HSCodes = () => {
                     <div>No products found</div>
                   ) : (
                     filteredProducts.map((product) => (
-                      <div key={product.id} className="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 transition-colors">
+                      <div
+                        key={product.id}
+                        className="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 transition-colors"
+                      >
                         <div className="flex justify-between items-start mb-3">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-medium text-slate-900">{product.name}</h3>
-                              <Badge className={getStatusColor(getHSStatus(product))}>
+                              <h3 className="font-medium text-slate-900">
+                                {product.name}
+                              </h3>
+                              <Badge
+                                className={getStatusColor(getHSStatus(product))}
+                              >
                                 HS Code: {getHSStatus(product)}
                               </Badge>
                             </div>
-                            <p className="text-sm text-slate-600 mb-2">{product.description}</p>
-                             
+                            <p className="text-sm text-slate-600 mb-2">
+                              {product.description}
+                            </p>
+
                             {/* Display HS code below description */}
-                            {(approvedProductIds.includes(product.id) || 
-                              modifiedProductIds.includes(product.id) || 
-                              product.hsStatus === 'approved' || 
-                              product.hsStatus === 'modified') && (
+                            {(approvedProductIds.includes(product.id) ||
+                              modifiedProductIds.includes(product.id) ||
+                              product.hsStatus === "approved" ||
+                              product.hsStatus === "modified") && (
                               <p className="text-sm font-mono text-blue-700 mb-2">
-                                HS Code :  {product.suggestedCode.replace(/^(\d{4})(\d{2})(\d{4})$/, '$1.$2.$3')}
+                                HS Code :{" "}
+                                {product.suggestedCode.replace(
+                                  /^(\d{4})(\d{2})(\d{4})$/,
+                                  "$1.$2.$3"
+                                )}
                               </p>
                             )}
-                            
+
                             {processedProductIds.includes(product.id) && (
-                              <Badge variant="outline">{product.category}</Badge>
+                              <Badge variant="outline">
+                                {product.category}
+                              </Badge>
                             )}
                           </div>
-                          
+
                           {/* Detect button or status */}
-                          {approvedProductIds.includes(product.id) || modifiedProductIds.includes(product.id) || 
-                           product.hsStatus === 'approved' || product.hsStatus === 'modified' ? (
+                          {approvedProductIds.includes(product.id) ||
+                          modifiedProductIds.includes(product.id) ||
+                          product.hsStatus === "approved" ||
+                          product.hsStatus === "modified" ? (
                             <div className="flex items-center">
                               <Badge className="bg-green-100 text-green-800 border-green-200 mr-2">
                                 <CheckCircle className="h-3 w-3 mr-1" />
                                 Detected
                               </Badge>
-                             
                             </div>
                           ) : (
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               onClick={() => handleAIDetection(product.id)}
-                              disabled={detectingProductId === product.id || processedProductIds.includes(product.id)}
+                              disabled={
+                                detectingProductId === product.id ||
+                                processedProductIds.includes(product.id)
+                              }
                               className="bg-gradient-to-r from-blue-600 to-purple-600"
                             >
                               {detectingProductId === product.id ? (
@@ -890,35 +870,54 @@ const HSCodes = () => {
                             </Button>
                           )}
                         </div>
-                    
+
                         {processedProductIds.includes(product.id) && (
                           <div className="bg-slate-50 rounded-lg p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium text-slate-700">AI Suggestion</span>
-                              <Badge className={getConfidenceColor(product.confidence)}>
+                              <span className="text-sm font-medium text-slate-700">
+                                AI Suggestion
+                              </span>
+                              <Badge
+                                className={getConfidenceColor(
+                                  product.confidence
+                                )}
+                              >
                                 {product.confidence}% confidence
                               </Badge>
                             </div>
-                            <div className="text-lg font-mono text-slate-900 mb-3">{product.suggestedCode}</div>
-                    
+                            <div className="text-lg font-mono text-slate-900 mb-3">
+                              {product.suggestedCode}
+                            </div>
+
                             <div className="flex space-x-2 mt-3">
-                              <Button 
-                                size="sm" 
+                              <Button
+                                size="sm"
                                 variant="outline"
                                 onClick={() => handleApprove(product.id)}
-                                disabled={approvedProductIds.includes(product.id)}
+                                disabled={
+                                  approvedProductIds.includes(product.id) ||
+                                  approvingProductId === product.id
+                                }
                               >
                                 <CheckCircle className="h-4 w-4 mr-1" />
-                                {approvedProductIds.includes(product.id) ? "Approved" : "Approve"}
+                                {approvingProductId === product.id
+                                  ? "Approving..."
+                                  : approvedProductIds.includes(product.id)
+                                  ? "Approved"
+                                  : "Approve"}
                               </Button>
-                              <Button 
-                                size="sm" 
+                              <Button
+                                size="sm"
                                 variant="outline"
                                 onClick={() => handleModify(product.id)}
-                                disabled={modifiedProductIds.includes(product.id)}
+                                disabled={modifiedProductIds.includes(
+                                  product.id
+                                )}
                               >
                                 <Edit className="h-4 w-4 mr-1" />
-                                {modifiedProductIds.includes(product.id) ? "Modified" : "Modify"}
+                                {modifiedProductIds.includes(product.id)
+                                  ? "Modified"
+                                  : "Modify"}
                               </Button>
                               <Button size="sm" variant="outline">
                                 <Eye className="h-4 w-4 mr-1" />
@@ -929,7 +928,6 @@ const HSCodes = () => {
                         )}
                       </div>
                     ))
-                    
                   )}
                 </div>
               </CardContent>

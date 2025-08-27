@@ -72,9 +72,10 @@ const Signup = () => {
         return;
       }
       // Store email in localStorage for session persistence
-      localStorage.setItem("user_email", email);
-      localStorage.setItem("user_type", "admin");
-      localStorage.setItem("user_role", "admin");
+      const user = { id: userId, name, email, type: 'admin', role: 'admin' };
+const token = 'temp_token_' + Math.random().toString(36); // Temporary token for OAuth flow
+localStorage.setItem('token', token);
+localStorage.setItem('user', JSON.stringify(user));;
       // Redirect to Shopify OAuth
       const shopifyAuthUrl = `https://${normalizedStoreUrl}/admin/oauth/authorize?client_id=${
         import.meta.env.VITE_SHOPIFY_API_KEY

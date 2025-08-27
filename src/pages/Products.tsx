@@ -832,8 +832,9 @@ const ProductAddModal = ({ onClose, onSave }) => {
 
 
 async function resolveShopAndToken() {
-  const email = localStorage.getItem("user_email");
-  const userType = localStorage.getItem("user_type");
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+const email = user.email;
+const userType = user.type;
   let shop, accessToken;
 
   if (userType === "sub_user") {

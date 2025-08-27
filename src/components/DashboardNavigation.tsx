@@ -39,9 +39,11 @@ export const DashboardNavigation = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { priceId, loading } = usePlan();
-  const isLoggedIn = !!localStorage.getItem("user_email");
-  const userType = localStorage.getItem("user_type");
-  const userRole = (localStorage.getItem("user_role") || "").toLowerCase();
+  const token = localStorage.getItem('token');
+const user = JSON.parse(localStorage.getItem('user') || '{}');
+const isLoggedIn = !!token;
+const userType = user.type;
+const userRole = (user.role || "").toLowerCase();
 
   const navigationItemsFree = [
     { path: "/products", label: "Products", icon: Package },
@@ -141,9 +143,8 @@ export const DashboardNavigation = () => {
                     size="sm"
                     className="text-red-600 hover:text-red-700"
                     onClick={() => {
-                      localStorage.removeItem("user_email");
-                      localStorage.removeItem("user_type");
-                      localStorage.removeItem("user_role");
+                      localStorage.removeItem("token");
+                      localStorage.removeItem("user");
                       navigate("/login");
                     }}
                   >
@@ -241,9 +242,8 @@ export const DashboardNavigation = () => {
                       size="sm"
                       className="w-full text-red-600 hover:text-red-700"
                       onClick={() => {
-                        localStorage.removeItem("user_email");
-                        localStorage.removeItem("user_type");
-                        localStorage.removeItem("user_role");
+                        localStorage.removeItem("token");
+                        localStorage.removeItem("user");
                         setIsMobileMenuOpen(false);
                         navigate("/login");
                       }}
@@ -320,9 +320,9 @@ export const DashboardNavigation = () => {
                     size="sm"
                     className="text-red-600 hover:text-red-700"
                     onClick={() => {
-                      localStorage.removeItem("user_email");
-                      localStorage.removeItem("user_type");
-                      localStorage.removeItem("user_role");
+                      localStorage.removeItem("token");
+                      localStorage.removeItem("user");
+                      setIsMobileMenuOpen(false);
                       navigate("/login");
                     }}
                   >
@@ -420,9 +420,8 @@ export const DashboardNavigation = () => {
                       size="sm"
                       className="w-full text-red-600 hover:text-red-700"
                       onClick={() => {
-                        localStorage.removeItem("user_email");
-                        localStorage.removeItem("user_type");
-                        localStorage.removeItem("user_role");
+                        localStorage.removeItem("token");
+                        localStorage.removeItem("user");
                         setIsMobileMenuOpen(false);
                         navigate("/login");
                       }}
@@ -494,9 +493,9 @@ export const DashboardNavigation = () => {
                   size="sm"
                   className="text-red-600 hover:text-red-700"
                   onClick={() => {
-                    localStorage.removeItem("user_email");
-                    localStorage.removeItem("user_type");
-                    localStorage.removeItem("user_role");
+                    localStorage.removeItem("token");
+                    localStorage.removeItem("user");
+                    setIsMobileMenuOpen(false);
                     navigate("/login");
                   }}
                 >
@@ -594,9 +593,8 @@ export const DashboardNavigation = () => {
                     size="sm"
                     className="w-full text-red-600 hover:text-red-700"
                     onClick={() => {
-                      localStorage.removeItem("user_email");
-                      localStorage.removeItem("user_type");
-                      localStorage.removeItem("user_role");
+                      localStorage.removeItem("token");
+                      localStorage.removeItem("user");
                       setIsMobileMenuOpen(false);
                       navigate("/login");
                     }}

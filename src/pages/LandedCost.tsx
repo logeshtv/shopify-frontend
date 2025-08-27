@@ -146,19 +146,21 @@ const LandedCost = () => {
     ? recentCalculations
     : recentCalculations.slice(0, 3);
 
-  // Search for approved/modified products
+
   const searchProducts = async () => {
     if (!productSearchTerm.trim()) {
       setSearchResults([]);
       setShowSearchResults(false);
       return;
     }
-
+  
     setIsSearching(true);
     try {
-      const email = localStorage.getItem("user_email");
-      const userType = localStorage.getItem("user_type");
-
+      // Get shop credentials using JWT tokens
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const email = user.email;
+      const userType = user.type;
+  
       let shop, shopify_access_token;
       if (userType === "sub_user") {
         const { data: subUser } = await supabase
@@ -166,32 +168,32 @@ const LandedCost = () => {
           .select("owner_id")
           .eq("email", email)
           .single();
-
+  
         const { data: shopRow } = await supabase
           .from("shops")
           .select("shopify_domain, shopify_access_token")
           .eq("user_id", subUser.owner_id)
           .single();
-
+  
         shop = shopRow.shopify_domain;
         shopify_access_token = shopRow.shopify_access_token;
       } else {
-        const { data: user } = await supabase
+        const { data: userData } = await supabase
           .from("users")
           .select("id")
           .eq("email", email)
           .single();
-
+  
         const { data: shopRow } = await supabase
           .from("shops")
           .select("shopify_domain, shopify_access_token")
-          .eq("user_id", user.id)
+          .eq("user_id", userData.id)
           .single();
-
+  
         shop = shopRow.shopify_domain;
         shopify_access_token = shopRow.shopify_access_token;
       }
-
+  
       const response = await fetch(`${backend}/dutify/products/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -201,7 +203,7 @@ const LandedCost = () => {
           searchTerm: productSearchTerm,
         }),
       });
-
+  
       if (response.ok) {
         const data = await response.json();
         setSearchResults(data.products || []);
@@ -218,7 +220,7 @@ const LandedCost = () => {
       setIsSearching(false);
     }
   };
-
+  
   // Auto-fill form with selected product
   const selectProduct = (product) => {
     setCalculation((prev) => ({

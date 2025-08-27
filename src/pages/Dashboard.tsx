@@ -27,9 +27,6 @@ import { DashboardNavigation } from "@/components/DashboardNavigation";
 import { supabase } from "../lib/supabaseClient";
 
 const Dashboard = () => {
-  // ────────────────────────────────────────────────
-  // State
-  // ────────────────────────────────────────────────
   const [syncProgress, setSyncProgress] = useState(0);
   const [shopData, setShopData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -38,47 +35,75 @@ const Dashboard = () => {
   const [userName, setUserName] = useState("");
   const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
 
-  // ────────────────────────────────────────────────
-  // Fetch data on mount
-  // ────────────────────────────────────────────────
+  // Handle Stripe success callback
+
+useEffect(() => {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('success') === 'true') {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('Payment successful! Please log in to access your dashboard.');
+      window.location.href = '/login';
+      return;
+    }
+    
+    // Refresh plan data after successful payment
+    setTimeout(() => {
+      window.location.reload(); // Force refresh to get updated plan
+    }, 2000);
+    
+    // Remove success param from URL
+    window.history.replaceState({}, document.title, '/dashboard');
+  }
+}, []);
+
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        
+        if (!token) {
+          window.location.href = '/login';
+          return;
+        }
+
+        setUserName(user.name || 'User');
+
         const { shop, accessToken } = await resolveShopAndToken();
 
-        // Shop info
-        const shopRes = await fetch(`${backend}/shopify/shop-info`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ shop, accessToken }),
-        });
-        if (shopRes.ok) {
-          const shopData = await shopRes.json();
-          setShopData(shopData.shop);
+        if (shop && accessToken) {
+          // Shop info
+          const shopRes = await fetch(`${backend}/shopify/shop-info`, {
+            method: "POST",
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({ shop, accessToken }),
+          });
+          if (shopRes.ok) {
+            const shopData = await shopRes.json();
+            setShopData(shopData.shop);
+          }
+
+          // Products
+          const productsRes = await fetch(`${backend}/shopify/getAllProducts`, {
+            method: "POST",
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({ shop, accessToken }),
+          });
+          if (productsRes.ok) {
+            const productsData = await productsRes.json();
+            setProducts(productsData.products || []);
+          }
         }
 
-        // Products
-        const productsRes = await fetch(`${backend}/shopify/getAllProducts`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ shop, accessToken }),
-        });
-        if (productsRes.ok) {
-          const productsData = await productsRes.json();
-          setProducts(productsData.products || []);
-        }
-
-        // User name
-        const email = localStorage.getItem("user_email");
-        if (email) {
-          const { data: user } = await supabase
-            .from("users")
-            .select("name")
-            .eq("email", email)
-            .single();
-          setUserName(user?.name || "");
-        }
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -89,29 +114,25 @@ const Dashboard = () => {
     fetchData();
   }, [backend]);
 
-  // ────────────────────────────────────────────────
   // One‑time sync progress animation
-  // ────────────────────────────────────────────────
   useEffect(() => {
     const interval = setInterval(() => {
       setSyncProgress((prev) => {
         if (prev >= 100) {
-          clearInterval(interval);   // stop forever
+          clearInterval(interval);
           return 100;
         }
-        return prev + 1;             // increment by 1 %
+        return prev + 1;
       });
-    }, 40); // ≈ 4 s total (100 × 40 ms)
+    }, 40);
 
-    return () => clearInterval(interval); // cleanup on unmount
+    return () => clearInterval(interval);
   }, []);
 
-  // ────────────────────────────────────────────────
   // Derived metrics
-  // ────────────────────────────────────────────────
-  const totalProducts   = products.length;
-  const hsCoded         = products.filter((p) => p?.hs_code).length;
-  const needReview      = totalProducts - hsCoded;
+  const totalProducts = products.length;
+  const hsCoded = products.filter((p) => p?.hs_code).length;
+  const needReview = totalProducts - hsCoded;
   const complianceScore =
     totalProducts > 0 ? Math.round((hsCoded / totalProducts) * 100) : 0;
 
@@ -174,14 +195,11 @@ const Dashboard = () => {
   ];
 
   const upcomingTasks = [
-    { title: "Review HS codes for Electronics category", priority: "high",   dueDate: "Today" },
-    { title: "Update ESG documentation for Q4",           priority: "medium", dueDate: "Tomorrow" },
-    { title: "Generate reports for customs audit",        priority: "low",    dueDate: "Next week" },
+    { title: "Review HS codes for Electronics category", priority: "high", dueDate: "Today" },
+    { title: "Update ESG documentation for Q4", priority: "medium", dueDate: "Tomorrow" },
+    { title: "Generate reports for customs audit", priority: "low", dueDate: "Next week" },
   ];
 
-  // ────────────────────────────────────────────────
-  // Loading / error states
-  // ────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -201,9 +219,6 @@ const Dashboard = () => {
     );
   }
 
-  // ────────────────────────────────────────────────
-  // Main render
-  // ────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-50">
       <DashboardNavigation />
@@ -212,7 +227,7 @@ const Dashboard = () => {
         {/* Welcome */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            Welcome back, {userName || "Shopify User"}! 👋
+            Welcome back, {userName}! 👋
           </h1>
           <p className="text-slate-600">
             Here's what's happening with your compliance automation today.
@@ -555,8 +570,10 @@ const Dashboard = () => {
 };
 
 async function resolveShopAndToken() {
-  const email = localStorage.getItem("user_email");
-  const userType = localStorage.getItem("user_type");
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const email = user.email;
+  const userType = user.type;
+  
   let shop, accessToken;
 
   if (userType === "sub_user") {

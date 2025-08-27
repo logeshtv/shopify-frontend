@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,11 +16,9 @@ import {
   Download,
   Save,
   RefreshCw,
-  X,
 } from "lucide-react";
 import { DashboardNavigation } from "@/components/DashboardNavigation";
 import { createClient } from "@supabase/supabase-js";
-import COOGenerator from "@/components/COOGenerator";
 import InvoiceGenerator from "@/components/InvoiceGenerator";
 import PackingListGenerator from "@/components/PackingListGenerator";
 import OrderDetailsModal from "@/components/OrderDetailsModal";
@@ -46,351 +44,137 @@ const LoadingSpinner = ({ size = "md" }) => {
   );
 };
 
-const Documents = () => {
-  const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
-  const [products, setProducts] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [ordersLoading, setOrdersLoading] = useState(true);
+// ESG Modal Component
+const ESGModal = ({ product, onClose }) => {
+  const [esgData, setEsgData] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [generatedCertificates, setGeneratedCertificates] = useState([]);
-  const [existingInvoices, setExistingInvoices] = useState([]);
-  const [generatedInvoices, setGeneratedInvoices] = useState([]);
-  const [selectedPackingOrder, setSelectedPackingOrder] = useState(null);
-  const [generatedPackingLists, setGeneratedPackingLists] = useState([]);
-  const [viewOrder, setViewOrder] = useState(null);
 
-  // Fetch certificates from Supabase
-  useEffect(() => {
-    const fetchCertificates = async () => {
-      try {
-        const email = localStorage.getItem("user_email");
-        if (!email) return;
+  const fetchESGData = async () => {
+    if (!product) return;
 
-        const { data, error } = await supabase
-          .from("certificates_of_origin")
-          .select("*")
-          .eq("user_email", email);
+    setLoading(true);
+    setError("");
 
-        if (error) {
-          console.error("Error fetching certificates:", error);
-          return;
-        }
-
-        if (data) {
-          console.log("Fetched certificates:", data);
-          setGeneratedCertificates(data);
-        }
-      } catch (error) {
-        console.error("Error in fetchCertificates:", error);
-      }
-    };
-    fetchCertificates();
-  }, []);
-
-  // Fetch existing invoices
-  useEffect(() => {
-    const fetchExistingInvoices = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("order_invoices")
-          .select("order_id, invoice_url");
-
-        if (error) {
-          console.error("Error fetching invoices:", error);
-          return;
-        }
-
-        if (data) {
-          // Extract order IDs that already have invoices
-          const invoiceOrderIds = data.map((invoice) =>
-            String(invoice.order_id)
-          );
-          setExistingInvoices(invoiceOrderIds);
-          setGeneratedInvoices(invoiceOrderIds);
-        }
-      } catch (error) {
-        console.error("Error in fetchExistingInvoices:", error);
-      }
-    };
-
-    fetchExistingInvoices();
-  }, []);
-
-  useEffect(() => {
-    const fetchExistingPackingLists = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("order_packing_lists")
-          .select("order_id, packing_list_url");
-  
-        if (error) {
-          console.error("Error fetching packing lists:", error);
-          return;
-        }
-  
-        if (data) {
-          // Extract order IDs that already have packing lists
-          const packingListOrderIds = data.map(item => String(item.order_id));
-          setExistingPackingLists(packingListOrderIds);
-          setGeneratedPackingLists(packingListOrderIds);
-          
-          // Update orders with existing packing list status
-          setOrders(prevOrders => 
-            prevOrders.map(order => ({
-              ...order,
-              documents: {
-                ...order.documents,
-                packagingList: packingListOrderIds.includes(String(order.id)) ? "done" : order.documents.packagingList
-              }
-            }))
-          );
-        }
-      } catch (error) {
-        console.error("Error in fetchExistingPackingLists:", error);
-      }
-    };
-    
-    fetchExistingPackingLists();
-  }, []);
-
-  // Function to save certificate to Supabase
-  const handleCertificateGenerated = async (product) => {
     try {
-      const email = localStorage.getItem("user_email");
-      if (!email) {
-        console.error("No user email found");
-        return;
+      const { data } = await supabase
+        .from("product_esg_scores")
+        .select("*")
+        .eq("product_id", product.id.toString())
+        .single();
+
+      if (data) {
+        setEsgData(data);
+      } else {
+        setError("No ESG data available for this product");
       }
-
-      const certificateData = {
-        product_id: String(product.id), // Ensure it's a string
-        product_name: product.name,
-        vendor: product.vendor,
-        product_type: product.type,
-        certificate_number: `COO-${product.id}`,
-        user_email: email,
-        status: "generated",
-      };
-
-      console.log("Saving certificate:", certificateData);
-
-      const { data, error } = await supabase
-        .from("certificates_of_origin")
-        .insert([certificateData])
-        .select();
-
-      if (error) {
-        console.error("Error saving certificate:", error);
-        return;
-      }
-
-      if (data && data.length > 0) {
-        console.log("Certificate saved successfully:", data[0]);
-        setGeneratedCertificates((prev) => [...prev, data[0]]);
-      }
-    } catch (error) {
-      console.error("Error in handleCertificateGenerated:", error);
+    } catch (err) {
+      setError("Failed to fetch ESG data");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Fetch orders from Shopify
   useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        setOrdersLoading(true);
-        const email = localStorage.getItem("user_email");
-        const userType = localStorage.getItem("user_type");
+    if (product) {
+      fetchESGData();
+    }
+  }, [product]);
 
-        let shop, shopify_access_token;
-        if (userType === "sub_user") {
-          const { data: subUser } = await supabase
-            .from("sub_users")
-            .select("owner_id")
-            .eq("email", email)
-            .single();
+  if (!product) return null;
 
-          const { data: shopRow } = await supabase
-            .from("shops")
-            .select("shopify_domain, shopify_access_token")
-            .eq("user_id", subUser.owner_id)
-            .single();
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">ESG Data - {product.name}</h3>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            ×
+          </Button>
+        </div>
 
-          shop = shopRow.shopify_domain;
-          shopify_access_token = shopRow.shopify_access_token;
-        } else {
-          const { data: user } = await supabase
-            .from("users")
-            .select("id")
-            .eq("email", email)
-            .single();
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <LoadingSpinner />
+            <span className="ml-2">Loading ESG data...</span>
+          </div>
+        ) : error ? (
+          <div className="text-red-600 text-center py-8">{error}</div>
+        ) : esgData ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center p-3 bg-blue-50 rounded">
+                <div className="text-2xl font-bold text-blue-600">
+                  {esgData.esg_score}
+                </div>
+                <div className="text-sm text-gray-600">Total ESG Score</div>
+              </div>
+              <div className="text-center p-3 bg-green-50 rounded">
+                <div className="text-2xl font-bold text-green-600">
+                  {esgData.environment_score}
+                </div>
+                <div className="text-sm text-gray-600">Environmental</div>
+              </div>
+              <div className="text-center p-3 bg-purple-50 rounded">
+                <div className="text-2xl font-bold text-purple-600">
+                  {esgData.social_score}
+                </div>
+                <div className="text-sm text-gray-600">Social</div>
+              </div>
+              <div className="text-center p-3 bg-orange-50 rounded">
+                <div className="text-2xl font-bold text-orange-600">
+                  {esgData.governance_score}
+                </div>
+                <div className="text-sm text-gray-600">Governance</div>
+              </div>
+            </div>
+            <div className="text-center">
+              <Badge
+                className={`${
+                  esgData.risk_level === "low"
+                    ? "bg-green-100 text-green-800"
+                    : esgData.risk_level === "medium"
+                    ? "bg-yellow-100 text-yellow-800"
+                    : "bg-red-100 text-red-800"
+                }`}
+              >
+                {esgData.risk_level.toUpperCase()} RISK
+              </Badge>
+            </div>
+          </div>
+        ) : (
+          <div className="text-gray-600 text-center py-8">
+            No ESG data available
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
-          const { data: shopRow } = await supabase
-            .from("shops")
-            .select("shopify_domain, shopify_access_token")
-            .eq("user_id", user.id)
-            .single();
+const Documents = () => {
+  const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
 
-          shop = shopRow.shopify_domain;
-          shopify_access_token = shopRow.shopify_access_token;
-        }
+  // Consolidated state
+  const [data, setData] = useState({
+    products: [],
+    orders: [],
+    invoices: [],
+    packingLists: [],
+  });
 
-        const response = await fetch(`${backend}/shopify/orders/all`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ shop, accessToken: shopify_access_token }),
-        });
+  const [loading, setLoading] = useState({
+    initial: true,
+    orders: false,
+    products: false,
+    documents: false,
+  });
 
-        if (response.ok) {
-          const data = await response.json();
-          const mappedOrders = (data.orders || []).map((order) => ({
-            id: order.id, // This is the actual Shopify order ID (like 5405895344318)
-            order_number: order.order_number || order.name, // This is the display number (like #1001)
-            customer:
-              order.customer?.first_name && order.customer?.last_name
-                ? `${order.customer.first_name} ${order.customer.last_name}`
-                : order.email || "Unknown Customer",
-            date: new Date(order.created_at).toISOString().split("T")[0],
-            status:
-              order.fulfillment_status || order.financial_status || "pending",
-            total: `$${parseFloat(order.total_price || 0).toFixed(2)}`,
-            documents: {
-              commercialInvoice: "pending",
-              packagingList: "pending",
-            },
-          }));
-
-          // Update orders with existing invoice status
-          const ordersWithInvoiceStatus = mappedOrders.map((order) => ({
-            ...order,
-            documents: {
-              ...order.documents,
-              commercialInvoice: existingInvoices.includes(String(order.id))
-                ? "done"
-                : order.documents.commercialInvoice,
-            },
-          }));
-
-          setOrders(ordersWithInvoiceStatus);
-const ordersWithDocStatus = mappedOrders.map((order) => ({
-  ...order,
-  documents: {
-    ...order.documents,
-    commercialInvoice: existingInvoices.includes(String(order.id))
-      ? "done"
-      : order.documents.commercialInvoice,
-    packagingList: existingPackingLists.includes(String(order.id))
-      ? "done"
-      : order.documents.packagingList
-  },
-}));
-
-setOrders(ordersWithDocStatus);
-
-
-        } else if (response.status === 403) {
-          console.warn(
-            "Orders API permission denied - using empty orders list"
-          );
-          setOrders([]);
-        } else {
-          throw new Error("Failed to fetch orders");
-        }
-      } catch (error) {
-        console.error("Failed to fetch orders:", error);
-        setOrders([]);
-      } finally {
-        setOrdersLoading(false);
-      }
-    };
-
-    fetchOrders();
-  }, [backend, existingInvoices]);
-
-  // Fetch products from Shopify
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
-        const email = localStorage.getItem("user_email");
-        const userType = localStorage.getItem("user_type");
-
-        let shop, shopify_access_token;
-        if (userType === "sub_user") {
-          const { data: subUser } = await supabase
-            .from("sub_users")
-            .select("owner_id")
-            .eq("email", email)
-            .single();
-
-          const { data: shopRow } = await supabase
-            .from("shops")
-            .select("shopify_domain, shopify_access_token")
-            .eq("user_id", subUser.owner_id)
-            .single();
-
-          shop = shopRow.shopify_domain;
-          shopify_access_token = shopRow.shopify_access_token;
-        } else {
-          const { data: user } = await supabase
-            .from("users")
-            .select("id")
-            .eq("email", email)
-            .single();
-
-          const { data: shopRow } = await supabase
-            .from("shops")
-            .select("shopify_domain, shopify_access_token")
-            .eq("user_id", user.id)
-            .single();
-
-          shop = shopRow.shopify_domain;
-          shopify_access_token = shopRow.shopify_access_token;
-        }
-
-        const response = await fetch(`${backend}/shopify/getAllProducts`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ shop, accessToken: shopify_access_token }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setProducts(data.products || []);
-        } else {
-          throw new Error("Failed to fetch products");
-        }
-      } catch (error) {
-        console.error("Failed to fetch products:", error);
-        setError(error.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProducts();
-  }, [backend]);
-
-  // Map products to include certification status
-  const allProducts = useMemo(() => {
-    return products.map((product) => {
-      const hasCertificate = generatedCertificates.some(
-        (cert) => String(cert.product_id) === String(product.id)
-      );
-
-      console.log(`Product ${product.id}: hasCertificate = ${hasCertificate}`);
-
-      return {
-        id: product.id,
-        name: product.title,
-        vendor: product.vendor || "N/A",
-        type: product.product_type || "N/A",
-        certificateOfOrigin: hasCertificate ? "done" : "pending",
-        esgStatement: "pending",
-      };
-    });
-  }, [products, generatedCertificates]);
+  const [error, setError] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [selectedPackingOrder, setSelectedPackingOrder] = useState(null);
+  const [viewOrder, setViewOrder] = useState(null);
+  const [esgProduct, setEsgProduct] = useState(null);
 
   // Filter state
   const [orderSearch, setOrderSearch] = useState("");
@@ -399,69 +183,286 @@ setOrders(ordersWithDocStatus);
   const [dateTo, setDateTo] = useState("");
   const [productSearch, setProductSearch] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
-  const [productStatusFilter, setProductStatusFilter] = useState("all");
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [existingPackingLists, setExistingPackingLists] = useState([]);
 
+  const [generateEsgProduct, setGenerateEsgProduct] = useState(null);
 
-  // Helper functions
-  const isOrderCompleted = (order) =>
-    order.documents.commercialInvoice === "done" &&
-    order.documents.packagingList === "done";
-  const isProductCertified = (product) =>
-    product.certificateOfOrigin === "done" && product.esgStatement === "done";
+  // Get user credentials once
+  const getUserCredentials = useCallback(async () => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const email = user.email;
+      const userType = user.type;
+
+      if (!email) throw new Error("No user email found");
+
+      let shop, shopify_access_token;
+      if (userType === "sub_user") {
+        const { data: subUser } = await supabase
+          .from("sub_users")
+          .select("owner_id")
+          .eq("email", email)
+          .single();
+
+        const { data: shopRow } = await supabase
+          .from("shops")
+          .select("shopify_domain, shopify_access_token")
+          .eq("user_id", subUser.owner_id)
+          .single();
+
+        shop = shopRow.shopify_domain;
+        shopify_access_token = shopRow.shopify_access_token;
+      } else {
+        const { data: userData } = await supabase
+          .from("users")
+          .select("id")
+          .eq("email", email)
+          .single();
+
+        const { data: shopRow } = await supabase
+          .from("shops")
+          .select("shopify_domain, shopify_access_token")
+          .eq("user_id", userData.id)
+          .single();
+
+        shop = shopRow.shopify_domain;
+        shopify_access_token = shopRow.shopify_access_token;
+      }
+
+      return { email, shop, shopify_access_token };
+    } catch (error) {
+      console.error("Error getting user credentials:", error);
+      throw error;
+    }
+  }, []);
+
+  const fetchAllData = useCallback(async () => {
+    try {
+      setLoading((prev) => ({ ...prev, initial: true }));
+      setError("");
+
+      const credentials = await getUserCredentials();
+
+      // Fetch all data in parallel
+      const [
+        invoicesResult,
+        packingListsResult,
+        ordersResult,
+        productsResult,
+        esgResult,
+      ] = await Promise.allSettled([
+        // Fetch invoices
+        supabase.from("order_invoices").select("order_id, invoice_url"),
+
+        // Fetch packing lists
+        supabase
+          .from("order_packing_lists")
+          .select("order_id, packing_list_url"),
+
+        // Fetch orders
+        fetch(`${backend}/shopify/orders/all`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shop: credentials.shop,
+            accessToken: credentials.shopify_access_token,
+          }),
+        }),
+
+        // Fetch products
+        fetch(`${backend}/shopify/getAllProducts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shop: credentials.shop,
+            accessToken: credentials.shopify_access_token,
+          }),
+        }),
+
+        // Fetch ESG data
+        supabase.from("product_esg_scores").select("product_id"),
+      ]);
+
+      // Process results
+      const invoices =
+        invoicesResult.status === "fulfilled"
+          ? invoicesResult.value.data?.map((inv) => String(inv.order_id)) || []
+          : [];
+
+      const packingLists =
+        packingListsResult.status === "fulfilled"
+          ? packingListsResult.value.data?.map((pl) => String(pl.order_id)) ||
+            []
+          : [];
+
+      const esgProductIds =
+        esgResult.status === "fulfilled"
+          ? esgResult.value.data?.map((esg) => String(esg.product_id)) || []
+          : [];
+
+      let orders = [];
+      if (ordersResult.status === "fulfilled" && ordersResult.value.ok) {
+        const ordersData = await ordersResult.value.json();
+        orders = (ordersData.orders || []).map((order) => ({
+          id: order.id,
+          order_number: order.order_number || order.name,
+          customer:
+            order.customer?.first_name && order.customer?.last_name
+              ? `${order.customer.first_name} ${order.customer.last_name}`
+              : order.email || "Unknown Customer",
+          date: new Date(order.created_at).toISOString().split("T")[0],
+          status:
+            order.fulfillment_status || order.financial_status || "pending",
+          total: `$${parseFloat(order.total_price || 0).toFixed(2)}`,
+          documents: {
+            commercialInvoice: invoices.includes(String(order.id))
+              ? "done"
+              : "pending",
+            packagingList: packingLists.includes(String(order.id))
+              ? "done"
+              : "pending",
+          },
+        }));
+      }
+
+      let products = [];
+      if (productsResult.status === "fulfilled" && productsResult.value.ok) {
+        const productsData = await productsResult.value.json();
+        products = (productsData.products || []).map((product) => ({
+          id: product.id,
+          name: product.title,
+          vendor: product.vendor || "N/A",
+          type: product.product_type || "N/A",
+          esgStatus: esgProductIds.includes(String(product.id))
+            ? "done"
+            : "pending",
+        }));
+      }
+
+      // Update state once with all data
+      setData({
+        products,
+        orders,
+        invoices,
+        packingLists,
+      });
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      setError(error.message || "Failed to fetch data");
+    } finally {
+      setLoading((prev) => ({ ...prev, initial: false }));
+    }
+  }, [backend, getUserCredentials]);
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
+
+  // Memoized calculations
+  const calculations = useMemo(() => {
+    const isOrderCompleted = (order) =>
+      order.documents.commercialInvoice === "done" &&
+      order.documents.packagingList === "done";
+
+    const totalOrders = data.orders.length;
+    const completedOrders = data.orders.filter(isOrderCompleted).length;
+    const orderProgress = totalOrders
+      ? Math.round((completedOrders / totalOrders) * 100)
+      : 0;
+
+    const totalProducts = data.products.length;
+
+    return {
+      totalOrders,
+      completedOrders,
+      orderProgress,
+      totalProducts,
+      isOrderCompleted,
+    };
+  }, [data.orders, data.products]);
 
   // Filtered data
-  const filteredOrders = orders.filter((order) => {
-    const matchesSearch = order.id
-      .toString()
-      .toLowerCase()
-      .includes(orderSearch.toLowerCase());
-    const matchesCustomer = customerFilter
-      ? order.customer.toLowerCase().includes(customerFilter.toLowerCase())
-      : true;
-    const matchesDateFrom = dateFrom ? order.date >= dateFrom : true;
-    const matchesDateTo = dateTo ? order.date <= dateTo : true;
-    const matchesStatus =
-      orderStatusFilter === "all"
-        ? true
-        : orderStatusFilter === "completed"
-        ? isOrderCompleted(order)
-        : !isOrderCompleted(order);
-    return (
-      matchesSearch &&
-      matchesCustomer &&
-      matchesDateFrom &&
-      matchesDateTo &&
-      matchesStatus
-    );
-  });
+  const filteredOrders = useMemo(() => {
+    return data.orders.filter((order) => {
+      const matchesSearch = order.id
+        .toString()
+        .toLowerCase()
+        .includes(orderSearch.toLowerCase());
+      const matchesCustomer = customerFilter
+        ? order.customer.toLowerCase().includes(customerFilter.toLowerCase())
+        : true;
+      const matchesDateFrom = dateFrom ? order.date >= dateFrom : true;
+      const matchesDateTo = dateTo ? order.date <= dateTo : true;
+      const matchesStatus =
+        orderStatusFilter === "all"
+          ? true
+          : orderStatusFilter === "completed"
+          ? calculations.isOrderCompleted(order)
+          : !calculations.isOrderCompleted(order);
+      return (
+        matchesSearch &&
+        matchesCustomer &&
+        matchesDateFrom &&
+        matchesDateTo &&
+        matchesStatus
+      );
+    });
+  }, [
+    data.orders,
+    orderSearch,
+    customerFilter,
+    dateFrom,
+    dateTo,
+    orderStatusFilter,
+    calculations,
+  ]);
 
-  const filteredProducts = allProducts.filter((product) => {
-    const matchesSearch =
-      product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-      product.vendor.toLowerCase().includes(productSearch.toLowerCase()) ||
-      product.type.toLowerCase().includes(productSearch.toLowerCase());
-    const matchesStatus =
-      productStatusFilter === "all"
-        ? true
-        : productStatusFilter === "completed"
-        ? isProductCertified(product)
-        : !isProductCertified(product);
-    return matchesSearch && matchesStatus;
-  });
+  const filteredProducts = useMemo(() => {
+    return data.products.filter((product) => {
+      const matchesSearch =
+        product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+        product.vendor.toLowerCase().includes(productSearch.toLowerCase()) ||
+        product.type.toLowerCase().includes(productSearch.toLowerCase());
+      return matchesSearch;
+    });
+  }, [data.products, productSearch]);
 
-  // Calculations
-  const totalOrders = orders.length;
-  const completedOrders = orders.filter(isOrderCompleted).length;
-  const orderProgress = totalOrders
-    ? Math.round((completedOrders / totalOrders) * 100)
-    : 0;
-  const totalProducts = allProducts.length;
-  const certifiedProducts = allProducts.filter(isProductCertified).length;
-  const productProgress = totalProducts
-    ? Math.round((certifiedProducts / totalProducts) * 100)
-    : 0;
+  // Event handlers
+  const handleInvoiceGenerated = useCallback((orderId) => {
+    setData((prev) => ({
+      ...prev,
+      invoices: [...prev.invoices, String(orderId)],
+      orders: prev.orders.map((order) =>
+        order.id === orderId
+          ? {
+              ...order,
+              documents: {
+                ...order.documents,
+                commercialInvoice: "done",
+              },
+            }
+          : order
+      ),
+    }));
+  }, []);
+
+  const handlePackingGenerated = useCallback((orderId) => {
+    setData((prev) => ({
+      ...prev,
+      packingLists: [...prev.packingLists, String(orderId)],
+      orders: prev.orders.map((order) =>
+        order.id === orderId
+          ? {
+              ...order,
+              documents: {
+                ...order.documents,
+                packagingList: "done",
+              },
+            }
+          : order
+      ),
+    }));
+  }, []);
 
   const getStatusBadge = (status) => {
     const variants = {
@@ -495,47 +496,233 @@ setOrders(ordersWithDocStatus);
         Pending
       </Badge>
     );
-
-  const handleInvoiceGenerated = (orderId) => {
-    setGeneratedInvoices((prev) => [...prev, orderId]);
-
-    // Update order status
-    setOrders((prevOrders) =>
-      prevOrders.map((order) =>
-        order.id === orderId
-          ? {
-              ...order,
-              documents: {
-                ...order.documents,
-                commercialInvoice: "done",
-              },
+    const ESGGenerateModal = ({ product, onClose }) => {
+      const [vendorEmail, setVendorEmail] = useState("");
+      const [showRequestForm, setShowRequestForm] = useState(false);
+      const [loading, setLoading] = useState(false);
+      const [requestStatus, setRequestStatus] = useState(null);
+      const [checkingStatus, setCheckingStatus] = useState(true);
+    
+      // Get suggested vendors based on product type
+      const getSuggestedVendors = (productType) => {
+        const vendorSuggestions = {
+          Electronics: [
+            "Samsung", "LG Electronics", "Panasonic", "Sony", "Apple", "Microsoft", "Dell", "HP", "Lenovo", "Asus", "Acer", "Canon", "Epson", "Philips", "Siemens",
+          ],
+          Clothing: [
+            "Patagonia", "H&M Conscious", "Adidas", "Nike", "Puma", "Levi's", "Gap", "Zara", "Uniqlo", "Eileen Fisher", "Reformation", "Everlane", "Organic Basics", "Tentree",
+          ],
+          Food: [
+            "Nestlé", "Unilever", "General Mills", "Danone", "Kellogg's", "Mars", "Mondelez", "PepsiCo", "Coca-Cola", "Kraft Heinz", "Campbell Soup", "ConAgra", "Tyson Foods",
+          ],
+          Beauty: [
+            "L'Oréal", "Unilever", "P&G", "Johnson & Johnson", "Estée Lauder", "Shiseido", "Coty", "Revlon", "Avon", "Mary Kay", "Lush", "The Body Shop", "Burt's Bees",
+          ],
+          Home: [
+            "IKEA", "Philips", "Whirlpool", "Electrolux", "Bosch", "Samsung", "LG", "GE Appliances", "Dyson", "Shark", "Black+Decker", "KitchenAid", "Cuisinart",
+          ],
+          default: [
+            "Patagonia", "Unilever", "IKEA", "Philips", "Samsung", "Nike", "Nestlé", "L'Oréal", "Microsoft", "Apple", "Bosch", "Sony", "Adidas", "H&M Conscious", "General Mills",
+          ],
+        };
+    
+        return vendorSuggestions[productType] || vendorSuggestions["default"];
+      };
+    
+      const suggestedVendors = getSuggestedVendors(product?.type);
+    
+      // Get user ID from localStorage
+      const getUserId = () => {
+        const user = JSON.parse(localStorage.getItem("user") || "{}");
+        return user.id || user.email;
+      };
+    
+      // Check if request already sent
+      useEffect(() => {
+        const checkRequestStatus = async () => {
+          if (!product) return;
+          
+          setCheckingStatus(true);
+          try {
+            const userId = getUserId();
+            const response = await fetch(
+              `${import.meta.env.VITE_BACKEND_ENDPOINT}/esg-request-status/${userId}/${product.id}`
+            );
+            
+            if (response.ok) {
+              const data = await response.json();
+              setRequestStatus(data);
             }
-          : order
-      )
-    );
-  };
-
-  const handlePackingGenerated = (orderId) => {
-    setGeneratedPackingLists((prev) => [...prev, orderId]);
-
-    // Update order status
-    setOrders((prevOrders) =>
-      prevOrders.map((order) =>
-        order.id === orderId
-          ? {
-              ...order,
-              documents: {
-                ...order.documents,
-                packagingList: "done",
-              },
+          } catch (error) {
+            console.error('Error checking request status:', error);
+          } finally {
+            setCheckingStatus(false);
+          }
+        };
+    
+        checkRequestStatus();
+      }, [product]);
+    
+      const handleSendRequest = async () => {
+        if (!vendorEmail) return;
+    
+        setLoading(true);
+        try {
+          const userId = getUserId();
+          const response = await fetch(
+            `${import.meta.env.VITE_BACKEND_ENDPOINT}/send-esg-request`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                vendorEmail,
+                productName: product.name,
+                vendorName: product.vendor,
+                userId,
+                productId: product.id
+              }),
             }
-          : order
-      )
-    );
-  };
-
-
-
+          );
+    
+          const result = await response.json();
+          
+          if (response.ok) {
+            setRequestStatus({ hasRequested: true, requestData: { vendor_email: vendorEmail } });
+            setShowRequestForm(false);
+          } else {
+            alert("Failed to send request");
+          }
+        } catch (error) {
+          alert("Error sending request");
+        } finally {
+          setLoading(false);
+        }
+      };
+    
+      if (!product) return null;
+    
+      // Show loading while checking status
+      if (checkingStatus) {
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <div className="flex items-center justify-center py-8">
+                <LoadingSpinner />
+                <span className="ml-2">Checking request status...</span>
+              </div>
+            </div>
+          </div>
+        );
+      }
+    
+      // Show request submitted confirmation
+      if (requestStatus?.hasRequested) {
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Request Submitted</h3>
+                <Button variant="ghost" size="sm" onClick={onClose}>×</Button>
+              </div>
+    
+              <div className="space-y-4">
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                  <p className="text-sm text-gray-700">
+                    ESG registration request has been sent to{" "}
+                    <strong>{requestStatus.requestData?.vendor_email}</strong>
+                  </p>
+                </div>
+    
+                <div className="text-center text-sm text-gray-600">
+                  <p>We've contacted the vendor about ESG registration for:</p>
+                  <p className="font-medium mt-1">{product.name}</p>
+                  <p className="text-xs mt-2">
+                    You'll be notified once the vendor completes their ESG registration.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+    
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">ESG Data Not Available</h3>
+              <Button variant="ghost" size="sm" onClick={onClose}>×</Button>
+            </div>
+    
+            <div className="space-y-4">
+              <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                <AlertTriangle className="h-8 w-8 text-yellow-600 mx-auto mb-2" />
+                <p className="text-sm text-gray-700">
+                  Vendor <strong>{product.vendor}</strong> is not registered for ESG scoring
+                </p>
+              </div>
+    
+              <div>
+                <h4 className="font-medium mb-2">Suggested ESG-Certified Vendors:</h4>
+                <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                  <div className="grid grid-cols-1 gap-1">
+                    {suggestedVendors.map((vendor, index) => (
+                      <div
+                        key={index}
+                        className="p-2 bg-green-50 rounded text-sm text-center border border-green-200 hover:bg-green-100 transition-colors"
+                      >
+                        {vendor}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  These vendors offer similar products with ESG certification
+                </p>
+              </div>
+    
+              <div className="border-t pt-4">
+                {!showRequestForm ? (
+                  <Button
+                    onClick={() => setShowRequestForm(true)}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    Request Vendor Registration
+                  </Button>
+                ) : (
+                  <div className="space-y-3">
+                    <Input
+                      placeholder="Enter vendor email address"
+                      value={vendorEmail}
+                      onChange={(e) => setVendorEmail(e.target.value)}
+                      type="email"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleSendRequest}
+                        disabled={!vendorEmail || loading}
+                        className="flex-1"
+                      >
+                        {loading ? "Sending..." : "Send Request"}
+                      </Button>
+                      <Button
+                        onClick={() => setShowRequestForm(false)}
+                        variant="outline"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+    
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -549,18 +736,21 @@ setOrders(ordersWithDocStatus);
               Export Documentation Dashboard
             </h1>
             <p className="text-gray-600">
-              Track, generate, and manage all your export documentation and
-              product certifications
+              Track, generate, and manage all your export documentation
             </p>
           </div>
           <div className="flex gap-3">
             <Button
               variant="outline"
-              onClick={() => window.location.reload()}
-              disabled={loading || ordersLoading}
+              onClick={fetchAllData}
+              disabled={loading.initial}
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              {loading || ordersLoading ? "Syncing..." : "Sync"}
+              <RefreshCw
+                className={`h-4 w-4 mr-2 ${
+                  loading.initial ? "animate-spin" : ""
+                }`}
+              />
+              {loading.initial ? "Syncing..." : "Sync"}
             </Button>
             <Button variant="outline">
               <Download className="h-4 w-4 mr-2" />
@@ -573,6 +763,13 @@ setOrders(ordersWithDocStatus);
           </div>
         </div>
 
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+            {error}
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card className="border-0 shadow-sm">
@@ -581,7 +778,7 @@ setOrders(ordersWithDocStatus);
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Total Orders</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {totalOrders}
+                    {loading.initial ? "..." : calculations.totalOrders}
                   </p>
                 </div>
                 <FileText className="h-8 w-8 text-blue-600" />
@@ -596,7 +793,7 @@ setOrders(ordersWithDocStatus);
                     Orders Documented
                   </p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {completedOrders}
+                    {loading.initial ? "..." : calculations.completedOrders}
                   </p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-green-600" />
@@ -607,11 +804,9 @@ setOrders(ordersWithDocStatus);
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">
-                    Products Certified
-                  </p>
+                  <p className="text-sm text-gray-600 mb-1">Total Products</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {certifiedProducts}
+                    {loading.initial ? "..." : calculations.totalProducts}
                   </p>
                 </div>
                 <Globe className="h-8 w-8 text-purple-600" />
@@ -624,7 +819,7 @@ setOrders(ordersWithDocStatus);
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Completion Rate</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {orderProgress}%
+                    {loading.initial ? "..." : `${calculations.orderProgress}%`}
                   </p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-red-600" />
@@ -648,12 +843,12 @@ setOrders(ordersWithDocStatus);
                     <span className="text-sm text-gray-500">Progress:</span>
                     <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
                       <div
-                        className="h-2 bg-blue-500 rounded-full"
-                        style={{ width: `${orderProgress}%` }}
+                        className="h-2 bg-blue-500 rounded-full transition-all duration-300"
+                        style={{ width: `${calculations.orderProgress}%` }}
                       />
                     </div>
                     <span className="text-sm font-medium text-blue-700">
-                      {orderProgress}%
+                      {calculations.orderProgress}%
                     </span>
                   </div>
                 </div>
@@ -713,7 +908,7 @@ setOrders(ordersWithDocStatus);
                 </div>
 
                 {/* Orders Table */}
-                {ordersLoading ? (
+                {loading.initial ? (
                   <div className="flex items-center justify-center py-8">
                     <LoadingSpinner size="lg" />
                     <span className="ml-2 text-gray-600">
@@ -781,27 +976,22 @@ setOrders(ordersWithDocStatus);
                                   size="sm"
                                   variant="outline"
                                   disabled={
-                                    order.documents.commercialInvoice ===
-                                      "done" ||
-                                    existingInvoices.includes(String(order.id))
+                                    order.documents.commercialInvoice === "done"
                                   }
                                   onClick={() => setSelectedOrder(order)}
                                 >
                                   <FileText className="h-3 w-3" />
                                 </Button>
-
                                 <Button
-  size="sm"
-  variant="outline"
-  disabled={
-    order.documents.packagingList === "done" ||
-    existingPackingLists.includes(String(order.id))
-  }
-  onClick={() => setSelectedPackingOrder(order)}
->
-  <Truck className="h-3 w-3 mr-1" />
-</Button>
-
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={
+                                    order.documents.packagingList === "done"
+                                  }
+                                  onClick={() => setSelectedPackingOrder(order)}
+                                >
+                                  <Truck className="h-3 w-3" />
+                                </Button>
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -819,58 +1009,14 @@ setOrders(ordersWithDocStatus);
                 )}
               </CardContent>
             </Card>
+
             {/* Products Section */}
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-4">
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <CardTitle className="flex items-center text-xl">
-                    <Globe className="h-5 w-5 mr-2 text-green-600" />
-                    Products & Certificates ({filteredProducts.length})
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-500">Progress:</span>
-                    <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-2 bg-green-500 rounded-full"
-                        style={{ width: `${productProgress}%` }}
-                      />
-                    </div>
-                    <span className="text-sm font-medium text-green-700">
-                      {productProgress}%
-                    </span>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <Button
-                    size="sm"
-                    variant={
-                      productStatusFilter === "all" ? "default" : "outline"
-                    }
-                    onClick={() => setProductStatusFilter("all")}
-                  >
-                    All
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={
-                      productStatusFilter === "pending" ? "default" : "outline"
-                    }
-                    onClick={() => setProductStatusFilter("pending")}
-                  >
-                    Pending
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={
-                      productStatusFilter === "completed"
-                        ? "default"
-                        : "outline"
-                    }
-                    onClick={() => setProductStatusFilter("completed")}
-                  >
-                    Certified
-                  </Button>
-                </div>
+                <CardTitle className="flex items-center text-xl">
+                  <Globe className="h-5 w-5 mr-2 text-green-600" />
+                  Products & ESG ({filteredProducts.length})
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {/* Product Search */}
@@ -884,9 +1030,7 @@ setOrders(ordersWithDocStatus);
                 </div>
 
                 {/* Products Table */}
-                {error ? (
-                  <div className="text-red-600 p-4">{error}</div>
-                ) : loading ? (
+                {loading.initial ? (
                   <div className="flex items-center justify-center py-8">
                     <LoadingSpinner size="lg" />
                     <span className="ml-2 text-gray-600">
@@ -908,10 +1052,7 @@ setOrders(ordersWithDocStatus);
                             Type
                           </th>
                           <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">
-                            Origin Cert
-                          </th>
-                          <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">
-                            ESG Statement
+                            ESG Status
                           </th>
                           <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">
                             Actions
@@ -931,41 +1072,27 @@ setOrders(ordersWithDocStatus);
                               {product.type}
                             </td>
                             <td className="px-4 py-3">
-                              {getDocStatus(product.certificateOfOrigin)}
-                            </td>
-                            <td className="px-4 py-3">
-                              {getDocStatus(product.esgStatement)}
+                              {getDocStatus(product.esgStatus)}
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex gap-2">
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  disabled={
-                                    product.certificateOfOrigin === "done"
-                                  }
-                                  onClick={() =>
-                                    product.certificateOfOrigin !== "done" &&
-                                    setSelectedProduct(product)
-                                  }
-                                  className={
-                                    product.certificateOfOrigin === "done"
-                                      ? "opacity-50 cursor-not-allowed"
-                                      : ""
-                                  }
+                                  disabled={product.esgStatus === "pending"}
+                                  onClick={() => setEsgProduct(product)}
                                 >
-                                  <Globe className="h-3 w-3 mr-1" />
-                                  {product.certificateOfOrigin === "done"
-                                    ? "Generated"
-                                    : "Certificate"}
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  View
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  disabled={product.esgStatement === "done"}
+                                  disabled={product.esgStatus === "done"}
+                                  onClick={() => setGenerateEsgProduct(product)}
                                 >
                                   <Shield className="h-3 w-3 mr-1" />
-                                  ESG
+                                  Generate ESG
                                 </Button>
                               </div>
                             </td>
@@ -997,43 +1124,14 @@ setOrders(ordersWithDocStatus);
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
-                    Certify each product with Certificate of Origin and ESG
-                    Statement
+                    View ESG data for products to understand sustainability
+                    metrics
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
                     Use filters to quickly find pending documentation
                   </li>
                 </ul>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center text-lg">
-                  <Shield className="h-5 w-5 mr-2 text-green-600" />
-                  Compliance Status
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">
-                      Certified Products
-                    </span>
-                    <Badge className="bg-green-100 text-green-800">
-                      {certifiedProducts}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">
-                      Pending Certifications
-                    </span>
-                    <Badge className="bg-yellow-100 text-yellow-800">
-                      {totalProducts - certifiedProducts}
-                    </Badge>
-                  </div>
-                </div>
               </CardContent>
             </Card>
 
@@ -1055,10 +1153,6 @@ setOrders(ordersWithDocStatus);
                     Packing List
                   </div>
                   <div className="flex items-center gap-2">
-                    <Globe className="h-4 w-4 text-green-600" />
-                    Certificate of Origin
-                  </div>
-                  <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4 text-emerald-600" />
                     ESG Statement
                   </div>
@@ -1068,12 +1162,6 @@ setOrders(ordersWithDocStatus);
           </div>
         </div>
       </div>
-
-      <COOGenerator
-        product={selectedProduct}
-        onClose={() => setSelectedProduct(null)}
-        onGenerated={handleCertificateGenerated}
-      />
 
       <InvoiceGenerator
         order={selectedOrder}
@@ -1088,6 +1176,13 @@ setOrders(ordersWithDocStatus);
       />
 
       <OrderDetailsModal order={viewOrder} onClose={() => setViewOrder(null)} />
+
+      <ESGModal product={esgProduct} onClose={() => setEsgProduct(null)} />
+
+      <ESGGenerateModal
+        product={generateEsgProduct}
+        onClose={() => setGenerateEsgProduct(null)}
+      />
     </div>
   );
 };

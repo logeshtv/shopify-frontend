@@ -1,45 +1,30 @@
 import { Navigate } from "react-router-dom";
 import { usePlan } from "@/context/PlanContext";
 
-const ProtectedRoute = ({
-  children,
-  requiredRoles,
-  requiredPlans,
-}: {
-  children: JSX.Element;
-  requiredRoles?: string[];
-  requiredPlans?: string[]; // array of allowed priceIds
-}) => {
-  const isLoggedIn = !!localStorage.getItem("user_email");
-  const userType = localStorage.getItem("user_type");
-  const userRole = (localStorage.getItem("user_role") || "").toLowerCase();
+const ProtectedRoute = ({ children, requiredRoles, requiredPlans }) => {
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
   const { priceId, loading } = usePlan();
 
-  if (!isLoggedIn) {
+  if (!token) {
     return <Navigate to="/login" replace />;
   }
 
-  if (loading) return null; // or a spinner
+  if (loading) return null;
 
-  // Plan-based protection
   if (requiredPlans && !requiredPlans.includes(priceId)) {
     return <Navigate to="/billing" replace />;
   }
 
-  // Role-based protection (existing logic)
   if (requiredRoles) {
-    if (userType === "admin" && requiredRoles.includes("admin")) {
-      // Admin is allowed
-    } else if (
-      userType === "sub_user" &&
-      userRole &&
-      requiredRoles.includes(userRole)
-    ) {
-      // Sub-user with allowed role
-    } else {
+    const hasRole = user.type === 'admin' && requiredRoles.includes('admin') ||
+                   user.type === 'sub_user' && requiredRoles.includes(user.role);
+    
+    if (!hasRole) {
       return <Navigate to="/dashboard" replace />;
     }
   }
+
   return children;
 };
 

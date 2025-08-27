@@ -21,8 +21,10 @@ const supabase = createClient(
  *  Helpers
  * ────────────────────────────────────────────────────────────*/
 async function getShopCredentials() {
-  const email = localStorage.getItem("user_email");
-  const type  = localStorage.getItem("user_type");
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const email = user.email;
+  const type = user.type;
+  
   if (!email) throw new Error("Missing user email");
 
   if (type === "sub_user") {
@@ -52,18 +54,39 @@ async function getShopCredentials() {
   return { shop: shop.shopify_domain, token: shop.shopify_access_token };
 }
 
-async function fetchOrderDetails(orderId: number | string) {
-  const backend        = import.meta.env.VITE_BACKEND_ENDPOINT;
-  const { shop, token} = await getShopCredentials();
 
-  const res = await fetch(`${backend}/shopify/orders/details`, {
-    method : "POST",
-    headers: { "Content-Type": "application/json" },
-    body   : JSON.stringify({ shop, accessToken: token, orderId })
-  });
-  if (!res.ok) throw new Error("Order details request failed");
-  return res.json(); // { order , shop }
+async function fetchOrderDetails(orderId: number | string) {
+  const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
+  const { shop, token } = await getShopCredentials();
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+  try {
+    const res = await fetch(`${backend}/shopify/orders/details`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shop, accessToken: token, orderId }),
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Order details request failed: ${res.status} ${errorText}`);
+    }
+    
+    return res.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out. Please try again.');
+    }
+    throw error;
+  }
 }
+
 
 /* ────────────────────────────────────────────────────────────
  *  Tiny UI helpers

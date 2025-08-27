@@ -16,20 +16,20 @@ import {
   Settings,
   Shield,
   Key,
-  Mail,
   Plus,
   Edit,
   Trash2,
   Search,
-  MoreHorizontal,
   Crown,
   UserCheck,
   AlertTriangle,
 } from "lucide-react";
 import { DashboardNavigation } from "@/components/DashboardNavigation";
 import { supabase } from "../lib/supabaseClient";
+import { usePlan } from "../context/PlanContext";
 
 const Admin = () => {
+  const { user, priceId, loading: planLoading } = usePlan();
   const [searchTerm, setSearchTerm] = useState("");
   const [subUsers, setSubUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
@@ -55,38 +55,38 @@ const Admin = () => {
     setSubUsers(subUsersData || []);
   };
 
-  // Fetch roles and initial data
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      const userType = localStorage.getItem("user_type");
-      if (userType !== "admin") {
+      
+      if (!user || (!priceId && user.type !== 'admin')) {
         setIsAuthorized(false);
         setLoading(false);
         return;
       }
 
-      const email = localStorage.getItem("user_email");
+      const email = user.email;
       if (!email) {
         setIsAuthorized(false);
         setLoading(false);
         return;
       }
-      const { data: user, error: userError } = await supabase
+
+      const { data: userData, error: userError } = await supabase
         .from("users")
         .select("id, subuser_limit")
         .eq("email", email)
         .single();
 
-      if (userError || !user) {
+      if (userError || !userData) {
         setIsAuthorized(false);
         setLoading(false);
         return;
       }
 
-      setAdminId(user.id);
-      setSubuserLimit(user.subuser_limit || 5);
-      await fetchSubUsers(user.id);
+      setAdminId(userData.id);
+      setSubuserLimit(userData.subuser_limit || 5);
+      await fetchSubUsers(userData.id);
 
       const { data: rolesData } = await supabase
         .from("roles")
@@ -96,8 +96,11 @@ const Admin = () => {
       setIsAuthorized(true);
       setLoading(false);
     };
-    fetchData();
-  }, []);
+    
+    if (!planLoading) {
+      fetchData();
+    }
+  }, [user, priceId, planLoading]);
 
   const handleAddSubUser = async (e: FormEvent) => {
     e.preventDefault();
@@ -112,7 +115,6 @@ const Admin = () => {
     }
 
     try {
-      // Use Supabase Auth to create the user, which handles hashing securely
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: addForm.email,
         password: addForm.password,
@@ -128,7 +130,6 @@ const Admin = () => {
         throw authError;
       }
 
-      // If auth user is created, add to our custom sub_users table
       if (authData.user && adminId) {
         const { error: insertError } = await supabase.from("sub_users").insert([
           {
@@ -136,13 +137,10 @@ const Admin = () => {
             name: addForm.name,
             email: addForm.email,
             role: addForm.role,
-            // Do NOT store password_hash here from client-side
           },
         ]);
 
         if (insertError) {
-          // If this fails, we should ideally delete the user from auth.users
-          // For now, just show the error
           throw insertError;
         }
       }
@@ -152,14 +150,12 @@ const Admin = () => {
       if (adminId) {
         await fetchSubUsers(adminId);
       }
-    } catch (error: any) {
+    } catch (error) {
       setAddError(error.message);
     }
   };
 
   const handleDeleteSubUser = async (id: string) => {
-    // Note: This only deletes from sub_users, not from auth.users.
-    // A more robust solution would involve a server-side function.
     await supabase.from("sub_users").delete().eq("id", id);
     setSubUsers(subUsers.filter((u) => u.id !== id));
   };
@@ -185,7 +181,7 @@ const Admin = () => {
       user.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading) {
+  if (loading || planLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         Loading...
@@ -237,7 +233,7 @@ const Admin = () => {
             </Button>
           </div>
         </div>
-        {/* Add Sub-User Modal */}
+
         {showAddModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
             <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md">
@@ -299,7 +295,7 @@ const Admin = () => {
                     required
                   >
                     <option value="">Select role</option>
-                    {roles.map((role: any) => (
+                    {roles.map((role) => (
                       <option key={role.name} value={role.name}>
                         {role.name}
                       </option>
@@ -325,7 +321,7 @@ const Admin = () => {
             </div>
           </div>
         )}
-        {/* Stats Cards */}
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card className="border-0 shadow-lg">
             <CardContent className="p-6">
@@ -374,6 +370,7 @@ const Admin = () => {
             </CardContent>
           </Card>
         </div>
+
         <Tabs defaultValue="users" className="space-y-8">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="users">User Management</TabsTrigger>
@@ -381,7 +378,7 @@ const Admin = () => {
             <TabsTrigger value="settings">System Settings</TabsTrigger>
             <TabsTrigger value="logs">Audit Logs</TabsTrigger>
           </TabsList>
-          {/* Users Tab */}
+
           <TabsContent value="users" className="space-y-6">
             <Card className="border-0 shadow-lg">
               <CardContent className="p-6">
@@ -451,7 +448,7 @@ const Admin = () => {
               </CardContent>
             </Card>
           </TabsContent>
-          {/* Permissions Tab */}
+
           <TabsContent value="permissions" className="space-y-6">
             <div className="grid md:grid-cols-2 gap-6">
               <Card className="border-0 shadow-lg">
@@ -570,38 +567,18 @@ const Admin = () => {
             </div>
           </TabsContent>
 
-          {/* Settings Tab */}
           <TabsContent value="settings" className="space-y-6">
-            {/* systemSettings.map((section) => (
-              <Card key={section.category} className="border-0 shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Settings className="h-5 w-5 mr-2 text-purple-600" />
-                    {section.category}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {section.settings.map((setting, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 border border-slate-200 rounded-lg">
-                        <div>
-                          <h4 className="font-medium text-slate-900">{setting.name}</h4>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm text-slate-600">{setting.value}</span>
-                          <Button variant="ghost" size="sm">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )) */}
+            <Card className="border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle>System Settings</CardTitle>
+                <CardDescription>Configure system-wide settings</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-slate-600">Settings configuration coming soon...</p>
+              </CardContent>
+            </Card>
           </TabsContent>
 
-          {/* Logs Tab */}
           <TabsContent value="logs" className="space-y-6">
             <Card className="border-0 shadow-lg">
               <CardHeader>
@@ -614,24 +591,7 @@ const Admin = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {/* auditLogs.map((log) => (
-                    <div key={log.id} className="flex items-center justify-between p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-                      <div className="flex items-center space-x-3">
-                        <Badge className={getLogStatusColor(log.status)}>
-                          {log.status}
-                        </Badge>
-                        <div>
-                          <h4 className="text-sm font-medium text-slate-900">{log.action}</h4>
-                          <p className="text-xs text-slate-600">by {log.user} • {log.timestamp}</p>
-                        </div>
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {log.ip}
-                      </div>
-                    </div>
-                  )) */}
-                </div>
+                <p className="text-slate-600">Audit logs coming soon...</p>
               </CardContent>
             </Card>
           </TabsContent>

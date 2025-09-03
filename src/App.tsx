@@ -37,7 +37,7 @@ const App = () => (
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRoles={[]} requiredPlans={[]}>
                   <Dashboard />
                 </ProtectedRoute>
               }
@@ -45,7 +45,7 @@ const App = () => (
             <Route
               path="/products"
               element={
-                <ProtectedRoute requiredRoles={["admin", "manager"]}>
+                <ProtectedRoute requiredRoles={["admin", "manager"]} requiredPlans={[]}>
                   <Products />
                 </ProtectedRoute>
               }
@@ -127,7 +127,7 @@ const App = () => (
             <Route
               path="/billing"
               element={
-                <ProtectedRoute requiredRoles={["admin"]}>
+                <ProtectedRoute requiredRoles={["admin"]} requiredPlans={[]}>
                   <Billing />
                 </ProtectedRoute>
               }

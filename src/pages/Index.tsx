@@ -13,7 +13,7 @@ const Index = () => {
     {
       icon: Shield,
       title: "Automated HS Code Detection",
-      description: "AI-powered classification with 95%+ accuracy for seamless customs compliance"
+      description: "AI-powered classification with 95%+ accuracy for seamless customs Global Trade"
     },
     {
       icon: FileText,
@@ -36,7 +36,7 @@ const Index = () => {
     {
       name: "Sarah Chen",
       company: "EcoStyle Co.",
-      text: "ShopifyQ reduced our compliance processing time by 80%. Game-changer for our international expansion.",
+      text: "ShopifyQ reduced our Global Trade processing time by 80%. Game-changer for our international expansion.",
       rating: 5
     },
     {
@@ -86,7 +86,7 @@ const Index = () => {
       <section className="relative overflow-hidden py-20 px-4">
         <div className="max-w-7xl mx-auto text-center">
           <Badge className="mb-6 bg-blue-100 text-blue-700 border-blue-200">
-            🚀 AI-Powered Compliance Platform
+            🚀 AI-Powered Global Trade Platform
           </Badge>
           
           <h1 className="text-5xl md:text-7xl font-bold text-slate-900 mb-6 leading-tight">
@@ -97,7 +97,7 @@ const Index = () => {
           </h1>
           
           <p className="text-xl text-slate-600 mb-8 max-w-3xl mx-auto leading-relaxed">
-            ShopifyQ eliminates compliance headaches for DTC brands with AI-powered HS code detection, 
+            ShopifyQ eliminates Global Trade headaches for DTC brands with AI-powered HS code detection, 
             automated export documentation, and real-time ESG risk assessment.
           </p>
 
@@ -142,10 +142,10 @@ const Index = () => {
               ⚡ Core Features
             </Badge>
             <h2 className="text-4xl font-bold text-slate-900 mb-4">
-              Everything you need for global compliance
+              Everything you need for Global Trade
             </h2>
             <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-              Streamline your international operations with our comprehensive suite of compliance tools.
+              Streamline your international operations with our comprehensive suite of Global Trade tools.
             </p>
           </div>
 
@@ -239,7 +239,7 @@ const Index = () => {
       <section className="py-20 px-4 bg-gradient-to-br from-slate-900 to-slate-800">
         <div className="max-w-4xl mx-auto text-center text-white">
           <h2 className="text-4xl font-bold mb-6">
-            Ready to automate your compliance?
+            Ready to automate your Global Trade?
           </h2>
           <p className="text-xl mb-8 text-slate-300">
             Join hundreds of DTC brands already saving time and reducing risk with ShopifyQ.
@@ -273,7 +273,7 @@ const Index = () => {
                 </span>
               </div>
               <p className="text-slate-600">
-                AI-powered compliance automation for modern DTC brands.
+                AI-powered Global Trade automation for modern DTC brands.
               </p>
             </div>
             

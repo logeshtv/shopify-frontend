@@ -626,16 +626,7 @@ const HSCodes = () => {
               AI-powered classification for automated compliance
             </p>
           </div>
-          <div className="flex space-x-3">
-            <Button variant="outline">
-              <Upload className="h-4 w-4 mr-2" />
-              Bulk Import
-            </Button>
-            <Button className="bg-gradient-to-r from-blue-600 to-purple-600">
-              <Brain className="h-4 w-4 mr-2" />
-              Train AI Model
-            </Button>
-          </div>
+          
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">

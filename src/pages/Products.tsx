@@ -35,11 +35,12 @@ const API = {
   PRODUCTS_ALL: "/shopify/getAllProducts",
   PRODUCT_ID: "/shopify/getProductID",
   PRODUCT_CREATE: "/shopify/createProduct",
-  PRODUCT_UPDATE: "/shopify/updateProductID",
+  PRODUCT_UPDATE: "/shopify/updateProductID", 
   PRODUCT_DELETE: "/shopify/deleteProduct",
   IMAGE_CREATE: "/shopify/image/create",
   IMAGE_DELETE: "/shopify/image/delete",
 };
+
 
 const LoadingSpinner = ({ size = "md" }) => {
   const sizeClasses = {
@@ -69,15 +70,20 @@ const Products = () => {
     (async () => {
       try {
         setLoading(true);
+        setError("");
         const { shop, accessToken } = await resolveShopAndToken();
+        
         const res = await fetch(`${backend}${API.PRODUCTS_ALL}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ shop, accessToken }),
         });
+        
         if (!res.ok) {
-          throw new Error(`Error fetching products: ${res.statusText}`);
+          const errorText = await res.text();
+          throw new Error(`Error fetching products: ${res.status} ${errorText}`);
         }
+        
         const payload = await res.json();
         setProducts(payload.products || []);
       } catch (e: any) {
@@ -87,7 +93,7 @@ const Products = () => {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [backend]);
 
   const handleDeleteProduct = async (productId: string) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
@@ -112,8 +118,8 @@ const Products = () => {
     return products.filter(
       (p) =>
         p.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.variants?.some((v) =>
-          v.sku?.toLowerCase().includes(searchTerm.toLowerCase())
+        p.variants?.edges?.some((v) =>
+          v.node?.sku?.toLowerCase().includes(searchTerm.toLowerCase())
         )
     );
   }, [products, searchTerm]);
@@ -122,7 +128,6 @@ const Products = () => {
   const approved = products.filter(p => p.complianceStatus === "approved").length;
   const modified = products.filter(p => p.complianceStatus === "modified").length;
   const pending = products.filter(p => p.complianceStatus === "pending").length;
-
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -135,7 +140,7 @@ const Products = () => {
         />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-        <StatsCard title="Total Products" value={total} icon={Package} />
+          <StatsCard title="Total Products" value={total} icon={Package} />
           <StatsCard title="HS Coded" value={approved + modified} icon={CheckCircle} />
           <StatsCard title="Need Review" value={pending} icon={AlertTriangle} />
           <StatsCard title="High ESG Risk" value={0} icon={AlertTriangle} />
@@ -260,21 +265,20 @@ const StatsCard = ({ title, value, icon: Icon }) => (
   </Card>
 );
 
-
 const ProductRow = ({ product, onView, onEdit, onDelete }) => {
   const status = product.complianceStatus || "pending";
-  const sku = product.variants?.[0]?.sku ?? "—";
-  const price = product.variants?.[0]?.price ? `$${product.variants[0].price}` : "—";
-  const category = product.product_type || "—";
+  const sku = product.variants?.edges?.[0]?.node?.sku ?? "—";
+  const price = product.variants?.edges?.[0]?.node?.price ? `$${product.variants.edges[0].node.price}` : "—";
+  const category = product.productType || "—";
+  const imageUrl = product.featuredImage?.url || product.images?.edges?.[0]?.node?.url;
 
-  // Function to determine badge color based on status
   const getStatusBadgeClass = (status) => {
     switch (status) {
       case "approved":
         return "bg-green-100 text-green-800 border-green-200";
       case "modified":
         return "bg-blue-600 text-white border-blue-700";
-      default: // pending or any other status
+      default:
         return "bg-orange-100 text-orange-800 border-orange-200";
     }
   };
@@ -282,8 +286,8 @@ const ProductRow = ({ product, onView, onEdit, onDelete }) => {
   return (
     <div className="flex items-center space-x-2 sm:space-x-4 p-3 sm:p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
       <div className="w-12 h-12 sm:w-16 sm:h-16 bg-slate-200 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-        {product?.image?.src ? (
-          <img src={product.image.src} alt={product.title} className="object-cover w-full h-full" />
+        {imageUrl ? (
+          <img src={imageUrl} alt={product.title} className="object-cover w-full h-full" />
         ) : (
           <Package className="h-6 w-6 sm:h-8 sm:w-8 text-slate-400" />
         )}
@@ -323,10 +327,8 @@ const ProductRow = ({ product, onView, onEdit, onDelete }) => {
   );
 };
 
-
 const ProductViewModal = ({ productId, onClose }) => {
   const [product, setProduct] = useState<any>(null);
-  const [images, setImages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
 
@@ -342,7 +344,6 @@ const ProductViewModal = ({ productId, onClose }) => {
         if (res.ok) {
           const data = await res.json();
           setProduct(data);
-          setImages(data.images || []);
         }
       } catch (e) {
         console.error(e);
@@ -370,11 +371,11 @@ const ProductViewModal = ({ productId, onClose }) => {
           <p>Product not found</p>
         ) : (
           <div className="space-y-4">
-            {images.length > 0 && (
+            {product.images?.edges?.length > 0 && (
               <div className="grid grid-cols-2 gap-2">
-                {images.slice(0, 4).map((img) => (
-                  <div key={img.id} className="h-20 sm:h-24 bg-slate-100 rounded-lg overflow-hidden">
-                    <img src={img.src} alt={img.alt || product.title} className="w-full h-full object-cover" />
+                {product.images.edges.slice(0, 4).map((img, index) => (
+                  <div key={index} className="h-20 sm:h-24 bg-slate-100 rounded-lg overflow-hidden">
+                    <img src={img.node.url} alt={img.node.altText || product.title} className="w-full h-full object-cover" />
                   </div>
                 ))}
               </div>
@@ -382,17 +383,16 @@ const ProductViewModal = ({ productId, onClose }) => {
             
             <h2 className="text-lg sm:text-xl font-bold">{product.title}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-sm text-slate-700">
-              <div><strong>ID:</strong> {product.id}</div>
               <div><strong>Vendor:</strong> {product.vendor}</div>
-              <div><strong>Type:</strong> {product.product_type}</div>
+              <div><strong>Type:</strong> {product.productType}</div>
               <div><strong>Status:</strong> <Badge>{product.status}</Badge></div>
-              <div><strong>Price:</strong> ${product.variants?.[0]?.price}</div>
-              <div><strong>SKU:</strong> {product.variants?.[0]?.sku}</div>
+              <div><strong>Price:</strong> ${product.variants?.edges?.[0]?.node?.price}</div>
+              <div><strong>SKU:</strong> {product.variants?.edges?.[0]?.node?.sku}</div>
             </div>
-            {product.body_html && (
+            {product.description && (
               <div>
                 <strong>Description:</strong>
-                <div dangerouslySetInnerHTML={{ __html: product.body_html }} />
+                <div>{product.description}</div>
               </div>
             )}
             
@@ -432,22 +432,18 @@ const ProductViewModal = ({ productId, onClose }) => {
   );
 };
 
-
-
 const ProductEditModal = ({ productId, onClose, onSave }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [product, setProduct] = useState<any>(null);
   const [images, setImages] = useState<any[]>([]);
+  const [removedImageIds, setRemovedImageIds] = useState<string[]>([]);
   const [form, setForm] = useState({
     title: "",
     body_html: "",
     vendor: "",
     product_type: "",
-    price: "",
-    sku: "",
-    inventory_quantity: 0
   });
   const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
 
@@ -466,17 +462,13 @@ const ProductEditModal = ({ productId, onClose, onSave }) => {
 
       if (response.ok) {
         const data = await response.json();
-        const product = data.product;
-        setProduct(product);
-        setImages(product.images || []);
+        setProduct(data);
+        setImages(data.images?.edges?.map(edge => ({...edge.node, id: edge.node.url.split('/').pop().split('?')[0]})) || []);
         setForm({
-          title: product.title,
-          body_html: product.body_html || "",
-          vendor: product.vendor,
-          product_type: product.product_type,
-          price: product.variants?.[0]?.price || "",
-          sku: product.variants?.[0]?.sku || "",
-          inventory_quantity: product.variants?.[0]?.inventory_quantity || 0
+          title: data.title || "",
+          body_html: data.descriptionHtml || "",
+          vendor: data.vendor || "",
+          product_type: data.productType || "",
         });
       }
     } catch (e) {
@@ -486,27 +478,18 @@ const ProductEditModal = ({ productId, onClose, onSave }) => {
     }
   };
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
     const file = e.target.files[0];
     
     setUploading(true);
     try {
-      const { attachment, filename } = await fileToAttachment(file);
-      const { shop, accessToken } = await resolveShopAndToken();
-      const resp = await fetch(`${backend}${API.IMAGE_CREATE}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shop,
-          accessToken,
-          productId,
-          imageData: { attachment, filename, alt: filename },
-        }),
-      });
-      if (!resp.ok) throw new Error('Upload failed');
-      const { image } = await resp.json();
-      setImages((prev) => [...prev, image]);
+      const { attachment } = await fileToAttachment(file);
+      const newImage = {
+        originalSource: `data:${file.type};base64,${attachment}`,
+        alt: file.name
+      };
+      setImages(prev => [...prev, newImage]);
     } catch (e) {
       alert('Upload failed');
     } finally {
@@ -514,22 +497,12 @@ const ProductEditModal = ({ productId, onClose, onSave }) => {
     }
   };
 
-  const handleDeleteImage = async (imageId) => {
-    if (!confirm("Delete this image?")) return;
-    try {
-      const { shop, accessToken } = await resolveShopAndToken();
-      const res = await fetch(`${backend}${API.IMAGE_DELETE}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shop, accessToken, productId, imageId }),
-      });
-      if (res.ok) {
-        setImages(images.filter(img => img.id !== imageId));
-        alert("Image deleted successfully!");
-      }
-    } catch (e) {
-      alert("Failed to delete image");
+  const removeImage = (index: number) => {
+    const imageToRemove = images[index];
+    if (imageToRemove.id) {
+      setRemovedImageIds(prev => [...prev, imageToRemove.id]);
     }
+    setImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSave = async () => {
@@ -537,12 +510,40 @@ const ProductEditModal = ({ productId, onClose, onSave }) => {
     try {
       const { shop, accessToken } = await resolveShopAndToken();
 
+      const newImages = images.filter(img => !img.id);
+      const media = [];
+      for (const img of newImages) {
+        if (img.originalSource) {
+          media.push({
+            originalSource: img.originalSource,
+            alt: img.alt || img.altText
+          });
+        }
+      }
+
+      const updateData = { ...form };
+      if (media.length > 0) {
+        updateData.media = media;
+      }
+      if (removedImageIds.length > 0) {
+        updateData.removeImages = removedImageIds;
+      }
+
       const updateResp = await fetch(`${backend}${API.PRODUCT_UPDATE}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shop, accessToken, productId, productData: form }),
+        body: JSON.stringify({ 
+          shop, 
+          accessToken, 
+          productId, 
+          productData: updateData
+        }),
       });
-      if (!updateResp.ok) throw new Error("Failed to update product");
+      
+      if (!updateResp.ok) {
+        const errorText = await updateResp.text();
+        throw new Error(`Failed to update product: ${errorText}`);
+      }
 
       alert("Product updated successfully!");
       onSave?.();
@@ -580,16 +581,20 @@ const ProductEditModal = ({ productId, onClose, onSave }) => {
           <div className="space-y-4">
             {images.length > 0 && (
               <div>
-                <p className="text-sm font-medium mb-2">Current Images</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {images.map((img) => (
-                    <div key={img.id} className="relative h-16 sm:h-20 bg-slate-100 rounded-lg overflow-hidden">
-                      <img src={img.src} alt={img.alt} className="w-full h-full object-cover" />
+                <p className="text-sm font-medium mb-2">Product Images</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {images.map((img, index) => (
+                    <div key={index} className="relative h-20 bg-slate-100 rounded-lg overflow-hidden">
+                      <img 
+                        src={img.url || img.originalSource} 
+                        alt={img.altText || img.alt} 
+                        className="w-full h-full object-cover" 
+                      />
                       <button
-                        onClick={() => handleDeleteImage(img.id)}
+                        onClick={() => removeImage(index)}
                         className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
                       >
-                        <X className="h-2 w-2 sm:h-3 sm:w-3" />
+                        <X className="h-3 w-3" />
                       </button>
                     </div>
                   ))}
@@ -614,26 +619,8 @@ const ProductEditModal = ({ productId, onClose, onSave }) => {
                 onChange={(e) => setForm({...form, product_type: e.target.value})}
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                placeholder="Price"
-                value={form.price}
-                onChange={(e) => setForm({...form, price: e.target.value})}
-              />
-              <Input
-                placeholder="SKU"
-                value={form.sku}
-                onChange={(e) => setForm({...form, sku: e.target.value})}
-              />
-            </div>
-            <Input
-              placeholder="Inventory Quantity"
-              type="number"
-              value={form.inventory_quantity}
-              onChange={(e) => setForm({...form, inventory_quantity: parseInt(e.target.value) || 0})}
-            />
             <Textarea
-              placeholder="Description "
+              placeholder="Description"
               value={form.body_html}
               onChange={(e) => setForm({...form, body_html: e.target.value})}
               rows={3}
@@ -641,13 +628,12 @@ const ProductEditModal = ({ productId, onClose, onSave }) => {
             
             <label className={`flex items-center gap-2 text-sm font-medium cursor-pointer ${uploading ? 'opacity-50' : ''}`}>
               <ImageIcon className="h-4 w-4" />
-              <span>{uploading ? "Uploading..." : "Add New Image"}</span>
-              {uploading && <LoadingSpinner size="sm" />}
+              <span>{uploading ? "Uploading..." : "Add Image"}</span>
               <input
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={handleUpload}
+                onChange={handleImageUpload}
                 disabled={uploading}
               />
             </label>
@@ -658,9 +644,23 @@ const ProductEditModal = ({ productId, onClose, onSave }) => {
   );
 };
 
+
+function fileToAttachment(file: File): Promise<{ attachment: string; filename: string }> {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      res({ attachment: base64, filename: file.name });
+    };
+    reader.onerror = rej;
+    reader.readAsDataURL(file);
+  });
+}
+
 const ProductAddModal = ({ onClose, onSave }) => {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [images, setImages] = useState<any[]>([]);
   const [form, setForm] = useState({
     title: "",
     body_html: "",
@@ -668,60 +668,56 @@ const ProductAddModal = ({ onClose, onSave }) => {
     product_type: "",
     price: "",
     sku: "",
-    inventory_quantity: 0
   });
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const backend = import.meta.env.VITE_BACKEND_ENDPOINT;
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
-    const files = Array.from(e.target.files);
-    setImageFiles(files);
+    const file = e.target.files[0];
     
-    const previews = files.map(file => URL.createObjectURL(file));
-    setImagePreviews(previews);
+    setUploading(true);
+    try {
+      const { attachment } = await fileToAttachment(file);
+      const newImage = {
+        originalSource: `data:${file.type};base64,${attachment}`,
+        alt: file.name
+      };
+      setImages(prev => [...prev, newImage]);
+    } catch (e) {
+      alert('Upload failed');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const removeImage = (index: number) => {
-    const newFiles = imageFiles.filter((_, i) => i !== index);
-    const newPreviews = imagePreviews.filter((_, i) => i !== index);
-    
-    URL.revokeObjectURL(imagePreviews[index]);
-    
-    setImageFiles(newFiles);
-    setImagePreviews(newPreviews);
+    setImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleAdd = async () => {
+    if (!form.title.trim()) {
+      alert("Product title is required");
+      return;
+    }
+
     setSaving(true);
     try {
       const { shop, accessToken } = await resolveShopAndToken();
 
+      const productData = { ...form };
+      if (images.length > 0) {
+        productData.media = images;
+      }
+
       const resp = await fetch(`${backend}${API.PRODUCT_CREATE}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shop, accessToken, productData: form }),
+        body: JSON.stringify({ shop, accessToken, productData }),
       });
-      if (!resp.ok) throw new Error("Product create failed");
-      const { product } = await resp.json();
-
-      if (imageFiles.length > 0) {
-        setUploading(true);
-        for (const file of imageFiles) {
-          const { attachment, filename } = await fileToAttachment(file);
-          await fetch(`${backend}${API.IMAGE_CREATE}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              shop,
-              accessToken,
-              productId: product.id,
-              imageData: { attachment, filename, alt: filename },
-            }),
-          });
-        }
-        setUploading(false);
+      
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        throw new Error(`Product create failed: ${errorText}`);
       }
 
       alert("Product created successfully!");
@@ -731,7 +727,6 @@ const ProductAddModal = ({ onClose, onSave }) => {
       alert(e.message);
     } finally {
       setSaving(false);
-      setUploading(false);
     }
   };
 
@@ -747,81 +742,87 @@ const ProductAddModal = ({ onClose, onSave }) => {
         
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <h2 className="text-lg sm:text-xl font-bold">Add New Product</h2>
-          <Button onClick={handleAdd} disabled={saving || uploading} className="w-full sm:w-auto">
+          <Button onClick={handleAdd} disabled={saving || !form.title.trim()} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
-            {saving ? (uploading ? "Uploading images..." : "Creating...") : "Create Product"}
-            {(saving || uploading) && <LoadingSpinner size="sm" />}
+            {saving ? "Creating..." : "Create Product"}
           </Button>
         </div>
 
         <div className="space-y-4">
-          {imagePreviews.length > 0 && (
+          <Input
+            placeholder="Product Title *"
+            value={form.title}
+            onChange={(e) => setForm({...form, title: e.target.value})}
+            required
+          />
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              placeholder="Vendor"
+              value={form.vendor}
+              onChange={(e) => setForm({...form, vendor: e.target.value})}
+            />
+            <Input
+              placeholder="Product Type"
+              value={form.product_type}
+              onChange={(e) => setForm({...form, product_type: e.target.value})}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              placeholder="Price"
+              type="number"
+              step="0.01"
+              value={form.price}
+              onChange={(e) => setForm({...form, price: e.target.value})}
+            />
+            <Input
+              placeholder="SKU"
+              value={form.sku}
+              onChange={(e) => setForm({...form, sku: e.target.value})}
+            />
+          </div>
+
+          <Textarea
+            placeholder="Description"
+            value={form.body_html}
+            onChange={(e) => setForm({...form, body_html: e.target.value})}
+            rows={3}
+          />
+
+          {images.length > 0 && (
             <div>
-              <p className="text-sm font-medium mb-2">Selected Images</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {imagePreviews.map((preview, index) => (
-                  <div key={index} className="relative h-16 sm:h-20 bg-slate-100 rounded-lg overflow-hidden">
-                    <img src={preview} alt={`Preview ${index + 1}`} className="w-full h-full object-cover" />
+              <p className="text-sm font-medium mb-2">Product Images</p>
+              <div className="grid grid-cols-3 gap-2">
+                {images.map((img, index) => (
+                  <div key={index} className="relative h-20 bg-slate-100 rounded-lg overflow-hidden">
+                    <img 
+                      src={img.originalSource} 
+                      alt={img.alt} 
+                      className="w-full h-full object-cover" 
+                    />
                     <button
                       onClick={() => removeImage(index)}
                       className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
                     >
-                      <X className="h-2 w-2 sm:h-3 sm:w-3" />
+                      <X className="h-3 w-3" />
                     </button>
                   </div>
                 ))}
               </div>
             </div>
-          
-
           )}
-
-          <Input
-            placeholder="Product Title"
-            value={form.title}
-            onChange={(e) => setForm({...form, title: e.target.value})}
-          />
-          <Input
-            placeholder="Vendor"
-            value={form.vendor}
-            onChange={(e) => setForm({...form, vendor: e.target.value})}
-          />
-          <Input
-            placeholder="Product Type"
-            value={form.product_type}
-            onChange={(e) => setForm({...form, product_type: e.target.value})}
-          />
-          <Input
-            placeholder="Price"
-            value={form.price}
-            onChange={(e) => setForm({...form, price: e.target.value})}
-          />
-          <Input
-            placeholder="SKU"
-            value={form.sku}
-            onChange={(e) => setForm({...form, sku: e.target.value})}
-          />
-          <Input
-            placeholder="Inventory Quantity"
-            type="number"
-            value={form.inventory_quantity}
-            onChange={(e) => setForm({...form, inventory_quantity: parseInt(e.target.value) || 0})}
-          />
-          <Textarea
-            placeholder="Description "
-            value={form.body_html}
-            onChange={(e) => setForm({...form, body_html: e.target.value})}
-          />
           
-          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+          <label className={`flex items-center gap-2 text-sm font-medium cursor-pointer ${uploading ? 'opacity-50' : ''}`}>
             <ImageIcon className="h-4 w-4" />
-            <span>Product Images</span>
+            <span>{uploading ? "Uploading..." : "Add Image"}</span>
             <input
               type="file"
               accept="image/*"
-              multiple
               className="hidden"
-              onChange={handleUpload}
+              onChange={handleImageUpload}
+              disabled={uploading}
             />
           </label>
         </div>
@@ -831,10 +832,11 @@ const ProductAddModal = ({ onClose, onSave }) => {
 };
 
 
+
 async function resolveShopAndToken() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
-const email = user.email;
-const userType = user.type;
+  const email = user.email;
+  const userType = user.type;
   let shop, accessToken;
 
   if (userType === "sub_user") {
@@ -865,18 +867,6 @@ const userType = user.type;
     accessToken = shopRow?.shopify_access_token;
   }
   return { shop, accessToken };
-}
-
-function fileToAttachment(file: File): Promise<{ attachment: string; filename: string }> {
-  return new Promise((res, rej) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = (reader.result as string).split(",")[1];
-      res({ attachment: base64, filename: file.name });
-    };
-    reader.onerror = rej;
-    reader.readAsDataURL(file);
-  });
 }
 
 export default Products;

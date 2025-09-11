@@ -545,13 +545,29 @@ const Documents = () => {
           setCheckingStatus(true);
           try {
             const userId = getUserId();
+            const productId = product.id;
             const response = await fetch(
-              `${import.meta.env.VITE_BACKEND_ENDPOINT}/esg-request-status/${userId}/${product.id}`
+              `${import.meta.env.VITE_BACKEND_ENDPOINT}/api/esg-request-status/${userId}/${productId}`
             );
             
             if (response.ok) {
               const data = await response.json();
               setRequestStatus(data);
+            } else {
+              const numericId = productId.toString().replace('gid://shopify/Product/', '');
+              const { data: requestData } = await supabase
+                .from('esg_requests')
+                .select('*')
+                .eq('user_id', userId)
+                .or(`product_id.eq.${productId},product_id.eq.${numericId}`)
+                .single();
+              
+              if (requestData) {
+                setRequestStatus({ 
+                  hasRequested: true, 
+                  requestData: { vendor_email: requestData.vendor_email } 
+                });
+              }
             }
           } catch (error) {
             console.error('Error checking request status:', error);
@@ -570,7 +586,7 @@ const Documents = () => {
         try {
           const userId = getUserId();
           const response = await fetch(
-            `${import.meta.env.VITE_BACKEND_ENDPOINT}/send-esg-request`,
+            `${import.meta.env.VITE_BACKEND_ENDPOINT}/api/send-esg-request`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },

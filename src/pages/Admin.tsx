@@ -46,13 +46,26 @@ const Admin = () => {
   const [subuserLimit, setSubuserLimit] = useState(5);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
 
-  const fetchSubUsers = async (userId: string) => {
-    const { data: subUsersData } = await supabase
-      .from("sub_users")
-      .select("id, name, email, role, created_at")
-      .eq("owner_id", userId)
-      .order("created_at", { ascending: true });
-    setSubUsers(subUsersData || []);
+  const fetchSubUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_ENDPOINT}/user/sub-users`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSubUsers(data);
+      } else {
+        console.error('Failed to fetch sub-users:', response.status);
+        setSubUsers([]);
+      }
+    } catch (error) {
+      console.error('Error fetching sub-users:', error);
+      setSubUsers([]);
+    }
   };
 
   useEffect(() => {
@@ -64,35 +77,48 @@ const Admin = () => {
         setLoading(false);
         return;
       }
-
+  
       const email = user.email;
       if (!email) {
         setIsAuthorized(false);
         setLoading(false);
         return;
       }
-
+  
       const { data: userData, error: userError } = await supabase
         .from("users")
-        .select("id, subuser_limit")
+        .select("id, priceId")
         .eq("email", email)
         .single();
-
+  
       if (userError || !userData) {
         setIsAuthorized(false);
         setLoading(false);
         return;
       }
-
+  
       setAdminId(userData.id);
-      setSubuserLimit(userData.subuser_limit || 5);
-      await fetchSubUsers(userData.id);
-
+      
+      // Calculate subuser limit based on price ID
+      let calculatedLimit = 1; // Default for free plan
+      const userPriceId = userData.priceId || priceId;
+      
+      if (userPriceId === 'price_1RcnoUQiUhrwJo9CamPZGsh1' || userPriceId === 'price_1RcnosQiUhrwJo9CzIMCgiea') {
+        calculatedLimit = 1; // Starter
+      } else if (userPriceId === 'price_1RcnpzQiUhrwJo9CVz7Wsug6' || userPriceId === 'price_1RcnqKQiUhrwJo9CCdhvD8Ep') {
+        calculatedLimit = 5; // Professional
+      } else if (userPriceId) {
+        calculatedLimit = 999; // Enterprise
+      }
+      
+      setSubuserLimit(calculatedLimit);
+      await fetchSubUsers();
+  
       const { data: rolesData } = await supabase
         .from("roles")
         .select("name, permissions");
       setRoles(rolesData || []);
-
+  
       setIsAuthorized(true);
       setLoading(false);
     };
@@ -101,7 +127,7 @@ const Admin = () => {
       fetchData();
     }
   }, [user, priceId, planLoading]);
-
+  
   const handleAddSubUser = async (e: FormEvent) => {
     e.preventDefault();
     setAddError("");
@@ -109,46 +135,31 @@ const Admin = () => {
       setAddError("All fields are required");
       return;
     }
-    if (subUsers.length >= subuserLimit) {
-      setAddError(`You can only add up to ${subuserLimit} sub-users.`);
-      return;
-    }
 
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: addForm.email,
-        password: addForm.password,
-        options: {
-          data: {
-            name: addForm.name,
-            role: addForm.role,
-          },
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_ENDPOINT}/user/sub-users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
+        body: JSON.stringify(addForm)
       });
 
-      if (authError) {
-        throw authError;
-      }
-
-      if (authData.user && adminId) {
-        const { error: insertError } = await supabase.from("sub_users").insert([
-          {
-            owner_id: adminId,
-            name: addForm.name,
-            email: addForm.email,
-            role: addForm.role,
-          },
-        ]);
-
-        if (insertError) {
-          throw insertError;
+      if (response.ok) {
+        await response.json();
+        setShowAddModal(false);
+        setAddForm({ name: "", email: "", password: "", role: "" });
+        await fetchSubUsers();
+      } else {
+        const errorText = await response.text();
+        try {
+          const errorData = JSON.parse(errorText);
+          throw new Error(errorData.error || 'Failed to create user');
+        } catch {
+          throw new Error(errorText || 'Failed to create user');
         }
-      }
-
-      setShowAddModal(false);
-      setAddForm({ name: "", email: "", password: "", role: "" });
-      if (adminId) {
-        await fetchSubUsers(adminId);
       }
     } catch (error) {
       setAddError(error.message);
@@ -156,8 +167,21 @@ const Admin = () => {
   };
 
   const handleDeleteSubUser = async (id: string) => {
-    await supabase.from("sub_users").delete().eq("id", id);
-    setSubUsers(subUsers.filter((u) => u.id !== id));
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_ENDPOINT}/user/sub-users/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        setSubUsers(subUsers.filter((u) => u.id !== id));
+      }
+    } catch (error) {
+      console.error('Error deleting sub-user:', error);
+    }
   };
 
   const getRoleColor = (role: string) => {

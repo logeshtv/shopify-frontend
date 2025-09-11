@@ -1,7 +1,13 @@
 import { Navigate } from "react-router-dom";
 import { usePlan } from "@/context/PlanContext";
 
-const ProtectedRoute = ({ children, requiredRoles, requiredPlans }) => {
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  requiredRoles?: string[];
+  requiredPlans?: string[];
+}
+
+const ProtectedRoute = ({ children, requiredRoles, requiredPlans }: ProtectedRouteProps) => {
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const { priceId, loading } = usePlan();
@@ -17,15 +23,16 @@ const ProtectedRoute = ({ children, requiredRoles, requiredPlans }) => {
   }
 
   if (requiredRoles) {
-    const hasRole = user.type === 'admin' && requiredRoles.includes('admin') ||
-                   user.type === 'sub_user' && requiredRoles.includes(user.role);
+    const userRole = user.role?.toLowerCase();
+    const hasRole = user.type === 'admin' || 
+                   (user.type === 'sub_user' && requiredRoles.includes(userRole));
     
     if (!hasRole) {
       return <Navigate to="/dashboard" replace />;
     }
   }
 
-  return children;
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;

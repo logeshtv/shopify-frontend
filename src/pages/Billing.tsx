@@ -31,7 +31,7 @@ const Billing = () => {
   const { priceId, loading } = usePlan();
 
   useEffect(() => {
-    if (priceId && priceId !== null) {
+    if (priceId && priceId !== null && priceId !== "NULL") {
       if (
         priceId === "price_1RcnoUQiUhrwJo9CamPZGsh1" ||
         priceId === "price_1RcnosQiUhrwJo9CzIMCgiea"
@@ -43,11 +43,14 @@ const Billing = () => {
       ) {
         setCurrentPlan("pro");
       } else {
-        setCurrentPlan("free");
+        setCurrentPlan("enterprise");
       }
-      // sd
+    } else {
+      setCurrentPlan("free");
     }
   }, [priceId]);
+  
+  
 
   const handleCheckout = async (priceId: string, planId: string) => {
     setLoadingPlan(planId);
@@ -70,6 +73,7 @@ const Billing = () => {
       if (!response.ok) throw new Error('Checkout failed');
   
       const { url } = await response.json();
+      
       if (url) window.location.href = url;
     } catch (error) {
       alert('Checkout failed. Please try again.');
@@ -77,6 +81,7 @@ const Billing = () => {
       setLoadingPlan('');
     }
   };
+  
   
 
   const plans = [

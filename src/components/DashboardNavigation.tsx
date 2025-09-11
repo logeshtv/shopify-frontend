@@ -30,8 +30,8 @@ const rolePages: Record<string, string[]> = {
     "/admin",
   ],
   manager: ["/products", "/hs-codes", "/documents", "/landed-cost", "/esg"],
-  analyst: ["/hs-codes", "/documents", "/esg"],
-  viewer: ["/documents"],
+  analyst: ["/products", "/hs-codes", "/documents", "/landed-cost"],
+  viewer: ["/products"],
 };
 
 export const DashboardNavigation = () => {
@@ -40,27 +40,20 @@ export const DashboardNavigation = () => {
   const navigate = useNavigate();
   const { priceId, loading } = usePlan();
   const token = localStorage.getItem('token');
-const user = JSON.parse(localStorage.getItem('user') || '{}');
-const isLoggedIn = !!token;
-const userType = user.type;
-const userRole = (user.role || "").toLowerCase();
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isLoggedIn = !!token;
+  const userType = user.type;
+  const userRole = (user.role || "").toLowerCase();
 
   const navigationItemsFree = [
     { path: "/products", label: "Products", icon: Package },
-    // { path: "/hs-codes", label: "HS Codes", icon: BarChart3 },
-    // { path: "/documents", label: "Documents", icon: FileText },
-    // { path: "/landed-cost", label: "Landed Cost", icon: DollarSign },
-    // { path: "/esg", label: "ESG Risk", icon: Globe },
     { path: "/billing", label: "Billing", icon: CreditCard },
-    // { path: "/admin", label: "Admin", icon: Settings },
   ];
 
   const navigationItemsStarter = [
     { path: "/products", label: "Products", icon: Package },
     { path: "/hs-codes", label: "HS Codes", icon: BarChart3 },
     { path: "/documents", label: "Documents", icon: FileText },
-    // { path: "/landed-cost", label: "Landed Cost", icon: DollarSign },
-    // { path: "/esg", label: "ESG Risk", icon: Globe },
     { path: "/billing", label: "Billing", icon: CreditCard },
     { path: "/admin", label: "Admin", icon: Settings },
   ];
@@ -85,7 +78,7 @@ const userRole = (user.role || "").toLowerCase();
     allowedPages = rolePages[userRole];
   }
 
-  if (loading) return null; // or a spinner
+  if (loading) return null;
 
   // Free plan
   if (!priceId || priceId === "NULL") {
@@ -93,7 +86,6 @@ const userRole = (user.role || "").toLowerCase();
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex justify-between items-center h-16">
-            {/* Logo */}
             <Link to="/dashboard" className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">S</span>
@@ -103,10 +95,9 @@ const userRole = (user.role || "").toLowerCase();
               </span>
             </Link>
 
-            {/* Desktop Navigation */}
             <div className="hidden lg:flex items-center space-x-1">
               {navigationItemsFree
-                .filter((item) => allowedPages.includes(item.path))
+                .filter((item) => userType === "admin" || allowedPages.includes(item.path))
                 .map((item) => (
                   <Link key={item.path} to={item.path}>
                     <Button
@@ -125,16 +116,10 @@ const userRole = (user.role || "").toLowerCase();
                 ))}
             </div>
 
-            {/* Right side actions */}
             <div className="flex items-center space-x-3">
               {isLoggedIn ? (
                 <>
-                  <Button variant="ghost" size="sm" className="relative">
-                    <Bell className="h-5 w-5" />
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center text-xs bg-red-500 text-white">
-                      3
-                    </Badge>
-                  </Button>
+                  
                   <Button variant="ghost" size="sm">
                     <User className="h-5 w-5" />
                   </Button>
@@ -171,28 +156,22 @@ const userRole = (user.role || "").toLowerCase();
                   </Button>
                 </>
               )}
-              {/* Mobile menu button */}
               <Button
                 variant="ghost"
                 size="sm"
                 className="lg:hidden"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               >
-                {isMobileMenuOpen ? (
-                  <X className="h-5 w-5" />
-                ) : (
-                  <Menu className="h-5 w-5" />
-                )}
+                {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </Button>
             </div>
           </div>
 
-          {/* Mobile Navigation */}
           {isMobileMenuOpen && (
             <div className="lg:hidden py-4 border-t border-slate-200">
               <div className="space-y-2">
                 {navigationItemsFree
-                  .filter((item) => allowedPages.includes(item.path))
+                  .filter((item) => userType === "admin" || allowedPages.includes(item.path))
                   .map((item) => (
                     <Link key={item.path} to={item.path}>
                       <Button
@@ -269,7 +248,6 @@ const userRole = (user.role || "").toLowerCase();
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex justify-between items-center h-16">
-            {/* Logo */}
             <Link to="/dashboard" className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">S</span>
@@ -279,11 +257,9 @@ const userRole = (user.role || "").toLowerCase();
               </span>
             </Link>
 
-            {/* Desktop Navigation */}
             <div className="hidden lg:flex items-center space-x-1">
               {navigationItemsStarter
-                .slice(0, 5)
-                .filter((item) => allowedPages.includes(item.path))
+                .filter((item) => userType === "admin" || allowedPages.includes(item.path))
                 .map((item) => (
                   <Link key={item.path} to={item.path}>
                     <Button
@@ -302,16 +278,10 @@ const userRole = (user.role || "").toLowerCase();
                 ))}
             </div>
 
-            {/* Right side actions */}
             <div className="flex items-center space-x-3">
               {isLoggedIn ? (
                 <>
-                  <Button variant="ghost" size="sm" className="relative">
-                    <Bell className="h-5 w-5" />
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center text-xs bg-red-500 text-white">
-                      3
-                    </Badge>
-                  </Button>
+                  
                   <Button variant="ghost" size="sm">
                     <User className="h-5 w-5" />
                   </Button>
@@ -322,7 +292,6 @@ const userRole = (user.role || "").toLowerCase();
                     onClick={() => {
                       localStorage.removeItem("token");
                       localStorage.removeItem("user");
-                      setIsMobileMenuOpen(false);
                       navigate("/login");
                     }}
                   >
@@ -349,28 +318,22 @@ const userRole = (user.role || "").toLowerCase();
                   </Button>
                 </>
               )}
-              {/* Mobile menu button */}
               <Button
                 variant="ghost"
                 size="sm"
                 className="lg:hidden"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               >
-                {isMobileMenuOpen ? (
-                  <X className="h-5 w-5" />
-                ) : (
-                  <Menu className="h-5 w-5" />
-                )}
+                {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </Button>
             </div>
           </div>
 
-          {/* Mobile Navigation */}
           {isMobileMenuOpen && (
             <div className="lg:hidden py-4 border-t border-slate-200">
               <div className="space-y-2">
                 {navigationItemsStarter
-                  .filter((item) => allowedPages.includes(item.path))
+                  .filter((item) => userType === "admin" || allowedPages.includes(item.path))
                   .map((item) => (
                     <Link key={item.path} to={item.path}>
                       <Button
@@ -443,7 +406,6 @@ const userRole = (user.role || "").toLowerCase();
     <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex justify-between items-center h-16">
-          {/* Logo */}
           <Link to="/dashboard" className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">S</span>
@@ -453,10 +415,9 @@ const userRole = (user.role || "").toLowerCase();
             </span>
           </Link>
 
-          {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-1">
             {navigationItems
-              .filter((item) => allowedPages.includes(item.path))
+              .filter((item) => userType === "admin" || allowedPages.includes(item.path))
               .map((item) => (
                 <Link key={item.path} to={item.path}>
                   <Button
@@ -475,16 +436,10 @@ const userRole = (user.role || "").toLowerCase();
               ))}
           </div>
 
-          {/* Right side actions */}
           <div className="flex items-center space-x-3">
             {isLoggedIn ? (
               <>
-                <Button variant="ghost" size="sm" className="relative">
-                  <Bell className="h-5 w-5" />
-                  <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center text-xs bg-red-500 text-white">
-                    3
-                  </Badge>
-                </Button>
+                
                 <Button variant="ghost" size="sm">
                   <User className="h-5 w-5" />
                 </Button>
@@ -495,7 +450,6 @@ const userRole = (user.role || "").toLowerCase();
                   onClick={() => {
                     localStorage.removeItem("token");
                     localStorage.removeItem("user");
-                    setIsMobileMenuOpen(false);
                     navigate("/login");
                   }}
                 >
@@ -522,28 +476,22 @@ const userRole = (user.role || "").toLowerCase();
                 </Button>
               </>
             )}
-            {/* Mobile menu button */}
             <Button
               variant="ghost"
               size="sm"
               className="lg:hidden"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             >
-              {isMobileMenuOpen ? (
-                <X className="h-5 w-5" />
-              ) : (
-                <Menu className="h-5 w-5" />
-              )}
+              {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
           </div>
         </div>
 
-        {/* Mobile Navigation */}
         {isMobileMenuOpen && (
           <div className="lg:hidden py-4 border-t border-slate-200">
             <div className="space-y-2">
               {navigationItems
-                .filter((item) => allowedPages.includes(item.path))
+                .filter((item) => userType === "admin" || allowedPages.includes(item.path))
                 .map((item) => (
                   <Link key={item.path} to={item.path}>
                     <Button

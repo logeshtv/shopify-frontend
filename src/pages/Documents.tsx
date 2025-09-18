@@ -547,7 +547,7 @@ const Documents = () => {
             const userId = getUserId();
             const productId = product.id;
             const response = await fetch(
-              `${import.meta.env.VITE_BACKEND_ENDPOINT}/api/esg-request-status/${userId}/${productId}`
+              `${import.meta.env.VITE_BACKEND_ENDPOINT}/esg-request-status/${userId}/${productId}`
             );
             
             if (response.ok) {
@@ -586,7 +586,7 @@ const Documents = () => {
         try {
           const userId = getUserId();
           const response = await fetch(
-            `${import.meta.env.VITE_BACKEND_ENDPOINT}/api/send-esg-request`,
+            `${import.meta.env.VITE_BACKEND_ENDPOINT}/send-esg-request`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },

@@ -131,10 +131,10 @@ useEffect(() => {
 
   // Derived metrics
   const totalProducts = products.length;
-  const hsCoded = products.filter((p) => p?.hs_code).length;
-  const needReview = totalProducts - hsCoded;
+  const approved = products.filter((p) => p?.complianceStatus === "approved").length;
+  const needReview = products.filter((p) => p?.complianceStatus === "pending" || !p?.complianceStatus).length;
   const complianceScore =
-    totalProducts > 0 ? Math.round((hsCoded / totalProducts) * 100) : 0;
+    totalProducts > 0 ? Math.round((approved / totalProducts) * 100) : 0;
 
   const statsCards = [
     {
@@ -308,9 +308,9 @@ useEffect(() => {
                       >
                         <div className="flex items-center space-x-3">
                           <div className="w-10 h-10 bg-slate-200 rounded-lg flex items-center justify-center overflow-hidden">
-                            {product?.image?.src ? (
+                            {product?.featuredImage?.url || product?.images?.[0]?.url ? (
                               <img
-                                src={product.image.src}
+                                src={product.featuredImage?.url || product.images[0].url}
                                 alt={product.title}
                                 className="w-full h-full object-cover"
                               />
@@ -323,14 +323,20 @@ useEffect(() => {
                               {product.title}
                             </div>
                             <div className="text-xs text-slate-500">
-                              ${product.variants?.[0]?.price || "0.00"}
+                              ${product.variants?.edges?.[0]?.node?.price || product.variants?.[0]?.price || "0.00"}
                             </div>
                           </div>
                         </div>
                         <Badge
-                          variant={product.hs_code ? "default" : "secondary"}
+                          variant={
+                            product.complianceStatus === "approved" ? "default" :
+                            product.complianceStatus === "modified" ? "outline" :
+                            "secondary"
+                          }
                         >
-                          {product.hs_code ? "Coded" : "Pending"}
+                          {product.complianceStatus === "approved" ? "Approved" :
+                           product.complianceStatus === "modified" ? "Modified" :
+                           "Pending"}
                         </Badge>
                       </div>
                     ))}

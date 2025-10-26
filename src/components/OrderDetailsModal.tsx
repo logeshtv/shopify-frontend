@@ -131,7 +131,7 @@ const OrderDetailsModal: React.FC<Props> = ({ order, onClose }) => {
         setLoading(true);
 
         /* 1. Shopify order details */
-        const { order: full } = await fetchOrderDetails(order.id);
+        const full = await fetchOrderDetails(order.id);
         setData(full);
 
         /* 2. PDF URLs in Supabase */
@@ -185,9 +185,9 @@ const OrderDetailsModal: React.FC<Props> = ({ order, onClose }) => {
             <h2 className="text-xl font-bold">
               Order #{String(order.id).slice(-6)}
             </h2>
-            {data?.created_at && (
+            {data?.createdAt && (
               <p className="text-sm text-gray-500">
-                Placed {new Date(data.created_at).toLocaleDateString()}
+                Placed {new Date(data.createdAt).toLocaleDateString()}
               </p>
             )}
           </div>
@@ -207,32 +207,40 @@ const OrderDetailsModal: React.FC<Props> = ({ order, onClose }) => {
             <Section title="Customer">
               <Row
                 label="Name"
-                value={`${data.customer?.first_name || ""} ${data.customer?.last_name || ""}`.trim()}
+                value={`${data.customer?.firstName || ""} ${data.customer?.lastName || ""}`.trim()}
               />
-              <Row label="Email" value={data.email || data.contact_email} />
-              <Row label="Phone" value={data.customer?.phone || data.phone || "—"} />
+              <Row label="Email" value={data.email || data.customer?.email} />
+              <Row label="Phone" value={data.customer?.phone || "—"} />
             </Section>
 
             {/* ---- Shipping ---- */}
             <Section title="Shipping Address">
-              {(Object.values(data.shipping_address || {}) as string[])
-                .filter(Boolean)
-                .slice(0, 5)
-                .map((l, i) => <p key={i} className="text-sm">{l}</p>)}
+              {data.shippingAddress ? (
+                <>
+                  <p className="text-sm">{data.shippingAddress.firstName} {data.shippingAddress.lastName}</p>
+                  <p className="text-sm">{data.shippingAddress.address1}</p>
+                  {data.shippingAddress.address2 && <p className="text-sm">{data.shippingAddress.address2}</p>}
+                  <p className="text-sm">{data.shippingAddress.city}, {data.shippingAddress.province} {data.shippingAddress.zip}</p>
+                  <p className="text-sm">{data.shippingAddress.country}</p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-500">No shipping address</p>
+              )}
             </Section>
 
             {/* ---- Billing ---- */}
-            {data.billing_address && (
+            {data.billingAddress && (
               <Section title="Billing Address">
-                {(Object.values(data.billing_address) as string[])
-                  .filter(Boolean)
-                  .slice(0, 5)
-                  .map((l, i) => <p key={i} className="text-sm">{l}</p>)}
+                <p className="text-sm">{data.billingAddress.firstName} {data.billingAddress.lastName}</p>
+                <p className="text-sm">{data.billingAddress.address1}</p>
+                {data.billingAddress.address2 && <p className="text-sm">{data.billingAddress.address2}</p>}
+                <p className="text-sm">{data.billingAddress.city}, {data.billingAddress.province} {data.billingAddress.zip}</p>
+                <p className="text-sm">{data.billingAddress.country}</p>
               </Section>
             )}
 
             {/* ---- Items ---- */}
-            <Section title={`Items (${data.line_items.length})`}>
+            <Section title={`Items (${data.lineItems?.edges?.length || 0})`}>
               <table className="w-full text-sm border">
                 <thead className="bg-gray-50">
                   <tr>
@@ -243,15 +251,15 @@ const OrderDetailsModal: React.FC<Props> = ({ order, onClose }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.line_items.map((li: any) => (
+                  {data.lineItems?.edges?.map(({ node: li }: any) => (
                     <tr key={li.id}>
-                      <td className="border px-2 py-1">{li.title || li.name}</td>
+                      <td className="border px-2 py-1">{li.title}</td>
                       <td className="border px-2 py-1 text-center">{li.quantity}</td>
                       <td className="border px-2 py-1 text-center">
-                        ${parseFloat(li.price).toFixed(2)}
+                        ${parseFloat(li.originalUnitPriceSet.shopMoney.amount).toFixed(2)}
                       </td>
                       <td className="border px-2 py-1 text-center">
-                        ${(parseFloat(li.price) * parseInt(li.quantity)).toFixed(2)}
+                        ${(parseFloat(li.originalUnitPriceSet.shopMoney.amount) * parseInt(li.quantity)).toFixed(2)}
                       </td>
                     </tr>
                   ))}
@@ -261,12 +269,11 @@ const OrderDetailsModal: React.FC<Props> = ({ order, onClose }) => {
 
             {/* ---- Totals ---- */}
             <Section title="Totals">
-              <Row label="Subtotal"           value={`$${parseFloat(data.subtotal_price).toFixed(2)}`} />
-              <Row label="Tax"                value={`$${parseFloat(data.total_tax).toFixed(2)}`} />
-              <Row label="Shipping"           value={`$${parseFloat(data.total_shipping_price_set?.shop_money?.amount || 0).toFixed(2)}`} />
-              <Row label="Grand Total"        value={`$${parseFloat(data.total_price).toFixed(2)}`} />
-              <Row label="Financial Status"   value={data.financial_status} />
-              <Row label="Fulfillment Status" value={data.fulfillment_status || "unfulfilled"} />
+              <Row label="Subtotal"           value={`$${parseFloat(data.subtotalPriceSet?.shopMoney?.amount || 0).toFixed(2)}`} />
+              <Row label="Tax"                value={`$${parseFloat(data.totalTaxSet?.shopMoney?.amount || 0).toFixed(2)}`} />
+              <Row label="Grand Total"        value={`$${parseFloat(data.totalPriceSet?.shopMoney?.amount || 0).toFixed(2)}`} />
+              <Row label="Financial Status"   value={data.displayFinancialStatus} />
+              <Row label="Fulfillment Status" value={data.displayFulfillmentStatus || "unfulfilled"} />
             </Section>
 
             {/* ---- Invoice PDF ---- */}

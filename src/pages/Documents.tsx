@@ -304,15 +304,15 @@ const Documents = () => {
         const ordersData = await ordersResult.value.json();
         orders = (ordersData.orders || []).map((order) => ({
           id: order.id,
-          order_number: order.order_number || order.name,
+          order_number: order.name || order.order_number,
           customer:
-            order.customer?.first_name && order.customer?.last_name
-              ? `${order.customer.first_name} ${order.customer.last_name}`
-              : order.email || "Unknown Customer",
-          date: new Date(order.created_at).toISOString().split("T")[0],
+            order.customer?.firstName && order.customer?.lastName
+              ? `${order.customer.firstName} ${order.customer.lastName}`
+              : order.email || order.customer?.email || "Unknown Customer",
+          date: new Date(order.createdAt).toISOString().split("T")[0],
           status:
-            order.fulfillment_status || order.financial_status || "pending",
-          total: `$${parseFloat(order.total_price || 0).toFixed(2)}`,
+            order.displayFulfillmentStatus || order.displayFinancialStatus || "pending",
+          total: `${order.totalPriceSet?.shopMoney?.currencyCode || '$'} ${parseFloat(order.totalPriceSet?.shopMoney?.amount || 0).toFixed(2)}`,
           documents: {
             commercialInvoice: invoices.includes(String(order.id))
               ? "done"
@@ -322,6 +322,10 @@ const Documents = () => {
               : "pending",
           },
         }));
+      } else if (ordersResult.status === "fulfilled") {
+        console.error('Orders API error:', await ordersResult.value.text());
+      } else {
+        console.error('Orders fetch failed:', ordersResult.reason);
       }
 
       let products = [];
@@ -1095,20 +1099,16 @@ const Documents = () => {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  disabled={product.esgStatus === "pending"}
                                   onClick={() => setEsgProduct(product)}
                                 >
-                                  <Eye className="h-3 w-3 mr-1" />
-                                  View
+                                  <Shield className="h-3 w-3" />
                                 </Button>
                                 <Button
                                   size="sm"
-                                  variant="outline"
-                                  disabled={product.esgStatus === "done"}
+                                  variant="ghost"
                                   onClick={() => setGenerateEsgProduct(product)}
                                 >
-                                  <Shield className="h-3 w-3 mr-1" />
-                                  Generate ESG
+                                  <Info className="h-3 w-3" />
                                 </Button>
                               </div>
                             </td>
